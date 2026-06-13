@@ -57,6 +57,7 @@ Plans:
 
 **Goal:** Fix the failure modes that kill L1 scores — pagination, traps, multi-hop.
 **Mode:** mvp
+**Plans:** 1/4 plans complete
 **Success Criteria:**
 
 1. Aggregation helper pages through all results using `pagination.total`
@@ -66,6 +67,13 @@ Plans:
 5. **First Railway deploy** + endpoint check passes
 
 **Requirements:** DATA-01..05, OPS-01..02
+
+Plans:
+
+- [x] 03-01-PLAN.md — Pagination helper + CRM channel totals (Q6) + broken-pasta counter (Q11)
+- [ ] 03-02-PLAN.md
+- [ ] 03-03-PLAN.md
+- [ ] 03-04-PLAN.md
 
 ---
 
