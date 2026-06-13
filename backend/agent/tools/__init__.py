@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.tools import calls, crm, erp
+from agent.tools import calls, crm, erp, kb
 
 CRM_TOOLS = {definition["function"]["name"] for definition in crm.get_tool_definitions()}
 ERP_TOOLS = {definition["function"]["name"] for definition in erp.get_tool_definitions()}
 CALLS_TOOLS = {definition["function"]["name"] for definition in calls.get_tool_definitions()}
+KB_TOOLS = {definition["function"]["name"] for definition in kb.get_tool_definitions()}
 
 
 def get_tool_definitions() -> list[dict[str, Any]]:
@@ -16,6 +17,7 @@ def get_tool_definitions() -> list[dict[str, Any]]:
         crm.get_tool_definitions()
         + erp.get_tool_definitions()
         + calls.get_tool_definitions()
+        + kb.get_tool_definitions()
     )
 
 
@@ -26,4 +28,6 @@ def run_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
         return erp.run_erp_tool(name, arguments)
     if name in CALLS_TOOLS:
         return calls.run_calls_tool(name, arguments)
+    if name in KB_TOOLS:
+        return kb.run_kb_tool(name, arguments)
     raise ValueError(f"Unknown tool: {name}")

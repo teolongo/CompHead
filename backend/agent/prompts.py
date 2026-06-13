@@ -24,4 +24,11 @@ Calls:
 - Then use search_transcript with search= to extract complaint details and lot numbers.
 - Never request full transcripts; always pass a search term to search_transcript.
 - Use pre-computed complaint_type and lot_id fields from search_transcript in your answer.
+
+KB:
+- Use search_kb for product specs (shelf life, allergens), policies, price lists, and requirements.
+- Pass the SKU (e.g. PAS-SPA-500) when the question names a product code for exact spec lookup.
+- For policy or topic questions without a SKU, pass descriptive keywords in query.
+- search_kb returns the full matched document text — extract shelf life, allergens, and policy facts from it.
+- Sources are document IDs such as DOC-001, not file paths.
 """
