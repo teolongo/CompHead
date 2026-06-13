@@ -50,8 +50,8 @@ def _make_erp_chain_client() -> MagicMock:
     def _get_all_pages(path: str, params: dict | None = None, **_: object) -> list[dict]:
         if path == "/erp/production-orders":
             return [
-                {"production_order_id": "PRD-0001", "lot_id": "LOT-2026-0001", "sku": "PAS-PEN-500"},
-                {"production_order_id": "PRD-0002", "lot_id": "LOT-2026-0876", "sku": "PAS-SPA-500"},
+                {"id": "LOT-2026-0001", "sku": "PAS-PEN-500"},
+                {"id": "LOT-2026-0876", "sku": "PAS-SPA-500"},
             ]
         return []
 
@@ -62,27 +62,32 @@ def _make_erp_chain_client() -> MagicMock:
             return {
                 "data": [
                     {
-                        "finished_sku": "PAS-SPA-500",
-                        "component_sku": "RAW-SEM-003",
-                        "component_name": "Durum semolina - premium",
-                        "category": "semolina",
-                    },
-                    {
-                        "finished_sku": "PAS-SPA-500",
-                        "component_sku": "RAW-PCK-001",
-                        "component_name": "Carton box",
-                        "category": "packaging",
-                    },
+                        "sku": "PAS-SPA-500",
+                        "product_name": "Spaghetti n.5 - 500g box",
+                        "components": [
+                            {
+                                "raw_sku": "RAW-SEM-003",
+                                "description": "Durum semolina - premium",
+                                "qty_per_carton": 10.5,
+                                "unit": "kg",
+                            },
+                            {
+                                "raw_sku": "RAW-PCK-001",
+                                "description": "Carton box",
+                                "qty_per_carton": 1,
+                                "unit": "pcs",
+                            },
+                        ],
+                    }
                 ]
             }
         if path == "/erp/suppliers":
             return {
                 "data": [
                     {
-                        "supplier_id": "SUP-014",
+                        "id": "SUP-014",
                         "name": "Molino San Giorgio",
                         "category": "semolina",
-                        "materials": ["RAW-SEM-003"],
                     }
                 ]
             }
@@ -93,10 +98,11 @@ def _make_erp_chain_client() -> MagicMock:
                 "data": [
                     {
                         "sku": "RAW-SEM-003",
-                        "name": "Durum semolina - premium",
+                        "description": "Durum semolina - premium",
                         "type": "raw_material",
-                        "on_hand_qty": 50000,
-                        "minimum_qty": 20000,
+                        "on_hand": 50000,
+                        "min_stock": 20000,
+                        "below_min": False,
                     }
                 ]
             }

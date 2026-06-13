@@ -48,11 +48,6 @@ def _find_customer_id(question: str) -> str | None:
     match = _CUST_ID_RE.search(question)
     if match:
         return match.group(0).upper()
-    # Name-based lookup when no CUST-#### token (e.g. "Primato Supermercati")
-    lower = question.lower()
-    if "primato" in lower:
-        return "CUST-0132"
-    # Generic search: extract a likely company name fragment
     for term in re.findall(r"\b([A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+){0,3})\b", question):
         if term.lower() in {"generate", "create", "html", "deck", "slide", "sales", "rep"}:
             continue
@@ -60,7 +55,7 @@ def _find_customer_id(question: str) -> str | None:
             payload = get_client().get("/crm/customers", params={"search": term})
             rows = payload.get("data") or []
             if rows:
-                cid = rows[0].get("customer_id") or rows[0].get("id")
+                cid = rows[0].get("id") or rows[0].get("customer_id")
                 if cid:
                     return str(cid).upper()
         except Exception:
@@ -137,9 +132,9 @@ def _complaints_summary(customer_id: str) -> str:
 
 
 def _build_html_deck(customer: dict[str, Any], customer_id: str) -> str:
-    name = customer.get("name") or customer_id
+    name = customer.get("company_name") or customer.get("name") or customer_id
     channel = customer.get("channel") or "n/a"
-    region = customer.get("region") or "n/a"
+    city = customer.get("city") or customer.get("region") or "n/a"
     opps, total = _open_opportunities(customer_id)
     opp_lines = "".join(
         f"<li>{escape(str(o.get('title') or o.get('name') or 'Opportunity'))} — "
@@ -154,7 +149,7 @@ def _build_html_deck(customer: dict[str, Any], customer_id: str) -> str:
             f"<h2>{escape(name)}</h2>"
             f"<p><strong>ID:</strong> {escape(customer_id)}</p>"
             f"<p><strong>Channel:</strong> {escape(str(channel))} · "
-            f"<strong>Region:</strong> {escape(str(region))}</p>",
+            f"<strong>City:</strong> {escape(str(city))}</p>",
         ),
         (
             "Open deals",
@@ -217,10 +212,10 @@ def _build_pdf_report(question: str) -> tuple[str, str]:
             lines.extend(
                 [
                     ("SKU", sku),
-                    ("Product", str(row.get("name") or "")),
-                    ("On hand", str(row.get("on_hand_qty") or "")),
-                    ("Minimum", str(row.get("minimum_qty") or "")),
-                    ("Below minimum", str(row.get("below_minimum") or "")),
+                    ("Product", str(row.get("description") or row.get("name") or "")),
+                    ("On hand", str(row.get("on_hand") or row.get("on_hand_qty") or "")),
+                    ("Minimum", str(row.get("min_stock") or row.get("minimum_qty") or "")),
+                    ("Below minimum", str(row.get("below_min") or row.get("below_minimum") or "")),
                 ]
             )
 

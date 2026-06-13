@@ -89,8 +89,8 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": (
                 "Count how many calls report a specific defect or complaint phrase "
                 "(e.g. 'broken pasta') across ALL recorded calls. Pages through the "
-                "entire call log and runs a targeted transcript search per call, then "
-                "returns the exact count computed in Python. Use this for "
+                "entire call log and matches call metadata (topic, summary, outcome), "
+                "then returns the exact count computed in Python. Use this for "
                 "'how many calls mention X' aggregate questions."
             ),
             "parameters": {
@@ -158,6 +158,19 @@ def _extract_lot_id(segments: list[dict[str, Any]]) -> str | None:
     return None
 
 
+def _call_summary_fields(row: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "call_id": _call_id(row) or None,
+        "date": _call_date(row) or None,
+        "customer_id": row.get("customer_id"),
+        "type": row.get("type"),
+        "outcome": row.get("outcome"),
+        "topic": row.get("topic"),
+        "summary": row.get("summary"),
+        "related_lot_id": row.get("related_lot_id"),
+    }
+
+
 def _run_list_calls(arguments: dict[str, Any]) -> tuple[str, str]:
     params: dict[str, str] = {}
     for key in ("customer_id", "type", "outcome", "from", "to"):
@@ -169,14 +182,18 @@ def _run_list_calls(arguments: dict[str, Any]) -> tuple[str, str]:
     sorted_rows = sorted(rows, key=_call_date, reverse=True)
 
     most_recent = sorted_rows[0] if sorted_rows else {}
+    recent_fields = _call_summary_fields(most_recent)
     result = {
         "count": len(sorted_rows),
-        "most_recent_call_id": _call_id(most_recent) or None,
-        "most_recent_call_date": _call_date(most_recent) or None,
-        "customer_id": most_recent.get("customer_id"),
-        "type": most_recent.get("type"),
-        "outcome": most_recent.get("outcome"),
-        "calls_sample": sorted_rows[:5],
+        "most_recent_call_id": recent_fields["call_id"],
+        "most_recent_call_date": recent_fields["date"],
+        "customer_id": recent_fields["customer_id"],
+        "type": recent_fields["type"],
+        "outcome": recent_fields["outcome"],
+        "topic": recent_fields["topic"],
+        "summary": recent_fields["summary"],
+        "related_lot_id": recent_fields["related_lot_id"],
+        "calls_sample": [_call_summary_fields(row) for row in sorted_rows[:5]],
     }
     return json.dumps(result), "calls"
 
@@ -218,6 +235,17 @@ def _segments_match_defect(segments: list[dict[str, Any]], defect: str) -> bool:
     return all(word in combined for word in words)
 
 
+def _call_text_matches_defect(call: dict[str, Any], defect: str) -> bool:
+    combined = " ".join(
+        str(call.get(field) or "")
+        for field in ("topic", "summary", "outcome")
+    ).lower()
+    if not combined:
+        return False
+    words = [word for word in defect.lower().split() if word]
+    return all(word in combined for word in words)
+
+
 def _run_count_calls_by_defect(arguments: dict[str, Any]) -> tuple[str, str]:
     defect = arguments.get("defect")
     if not defect:
@@ -231,26 +259,22 @@ def _run_count_calls_by_defect(arguments: dict[str, Any]) -> tuple[str, str]:
     calls = client.get_all_pages("/calls", params=params or None)
 
     matching_ids: list[str] = []
-    searched = 0
     for call in calls:
         call_id = _call_id(call)
         if not call_id:
             continue
-        searched += 1
-        payload = client.get(
-            f"/calls/{call_id}/transcript",
-            params={"search": defect},
-        )
-        segments = (payload.get("segments") or [])[:SEGMENT_CAP]
-        if _segments_match_defect(segments, defect):
+        if _call_text_matches_defect(call, defect):
             matching_ids.append(call_id)
 
     result = {
         "defect": defect,
         "count": len(matching_ids),
-        "searched_call_count": searched,
+        "searched_call_count": len(calls),
         "matching_call_ids_sample": matching_ids[:MATCHING_IDS_SAMPLE_CAP],
-        "note": "Count computed in Python after paging all calls and targeted transcript search.",
+        "note": (
+            "Count computed in Python after paging all calls; matched on call "
+            "metadata (topic, summary, outcome)."
+        ),
     }
     return json.dumps(result), "calls"
 

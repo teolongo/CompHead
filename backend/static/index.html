@@ -153,36 +153,9 @@
       flex-direction: column;
       min-height: 0;
       border-right: 1px solid var(--border);
-      position: relative;
-      overflow: hidden;
-    }
-    .mesh-bg {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.55;
-      background: conic-gradient(from 180deg at 20% 30%, rgba(245,78,0,0.15), rgba(125,211,252,0.08), rgba(232,184,74,0.1), rgba(245,78,0,0.12));
-      animation: meshShift 18s linear infinite;
-    }
-    @keyframes meshShift {
-      to { filter: hue-rotate(360deg); }
-    }
-    @media (prefers-reduced-motion: reduce) {
-      .mesh-bg { animation: none; }
-    }
-    #hero-canvas {
-      position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-      opacity: 0.35;
+      background: var(--bg-base);
     }
     .chat-inner {
-      position: relative;
-      z-index: 1;
       display: flex;
       flex-direction: column;
       min-height: 0;
@@ -190,11 +163,15 @@
     }
     .hero-tag {
       flex-shrink: 0;
-      padding: 20px 24px 12px;
+      padding: 24px 24px 16px;
+      border-bottom: 1px solid var(--border);
+      border-left: 3px solid var(--accent-tomato);
+      margin-left: -0px;
+      padding-left: 24px;
     }
     .hero-tag h2 {
       margin: 0;
-      font-size: clamp(1.4rem, 2.5vw, 1.85rem);
+      font-size: clamp(1.3rem, 2.2vw, 1.7rem);
       font-weight: 800;
       letter-spacing: -0.04em;
       line-height: 1.15;
@@ -202,7 +179,7 @@
     .hero-tag p {
       margin: 6px 0 0;
       color: var(--text-muted);
-      font-size: 14px;
+      font-size: 13px;
       max-width: 420px;
     }
 
@@ -691,7 +668,6 @@
       .graph-col.open { display: flex; }
       .graph-fab { display: grid; place-items: center; }
       .header-chips { display: none; }
-      .mesh-bg { opacity: 0.35; }
     }
   </style>
 </head>
@@ -721,8 +697,6 @@
 
     <div class="main">
       <section class="chat-col">
-        <div class="mesh-bg" aria-hidden="true"></div>
-        <canvas id="hero-canvas" aria-hidden="true"></canvas>
         <div class="chat-inner">
           <div class="hero-tag">
             <h2>Ask the company brain</h2>
@@ -797,7 +771,6 @@
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
   <script>
     const SAMPLE_PROMPTS = [
       { tag: "crm", label: "CRM", text: "How many open opportunities does Primato Supermercati S.p.A. (CUST-0132) have, and what is their total value?" },
@@ -1265,52 +1238,8 @@
       document.getElementById("node-detail").classList.remove("visible");
     }
 
-    function initHero() {
-      if (reducedMotion || typeof THREE === "undefined") return;
-      const canvas = document.getElementById("hero-canvas");
-      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-      const scene = new THREE.Scene();
-      const camera = new THREE.PerspectiveCamera(55, 2, 0.1, 100);
-      camera.position.z = 6;
-      const group = new THREE.Group();
-      const palette = [0xf54e00, 0x7dd3fc, 0xe8b84a, 0x4ade80, 0xf54e00];
-      for (let i = 0; i < 5; i++) {
-        const curve = new THREE.CatmullRomCurve3([
-          new THREE.Vector3(-3 + i * 0.5, -1.2 + i * 0.2, -0.5),
-          new THREE.Vector3(-1 + i * 0.3, 1.4, 0.4),
-          new THREE.Vector3(1.5, -0.3, -0.3),
-          new THREE.Vector3(3.2, 1.0 + i * 0.1, 0.2)
-        ]);
-        const geo = new THREE.TubeGeometry(curve, 64, 0.025 + i * 0.008, 6, false);
-        const mat = new THREE.MeshBasicMaterial({
-          color: palette[i], transparent: true, opacity: 0.18 + i * 0.04, wireframe: i % 2 === 0
-        });
-        const mesh = new THREE.Mesh(geo, mat);
-        mesh.rotation.z = i * 0.15;
-        group.add(mesh);
-      }
-      scene.add(group);
-      function resize() {
-        const w = canvas.clientWidth, h = canvas.clientHeight;
-        if (!w || !h) return;
-        renderer.setSize(w, h, false);
-        camera.aspect = w / h;
-        camera.updateProjectionMatrix();
-      }
-      resize();
-      window.addEventListener("resize", resize);
-      (function animate() {
-        requestAnimationFrame(animate);
-        group.rotation.y += 0.0015;
-        group.rotation.x += 0.0008;
-        renderer.render(scene, camera);
-      })();
-    }
-
     initPrompts();
     loadGraph();
-    initHero();
   </script>
 </body>
 </html>

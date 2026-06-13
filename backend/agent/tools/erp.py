@@ -184,9 +184,12 @@ def _row_int(row: dict[str, Any], *keys: str) -> int:
 
 
 def _compute_inventory_status(row: dict[str, Any]) -> tuple[bool, int, int]:
-    on_hand = _row_int(row, "on_hand_qty", "on_hand", "quantity_on_hand")
-    minimum = _row_int(row, "minimum_qty", "minimum_stock", "min_qty", "minimum")
-    below_minimum = on_hand < minimum if minimum > 0 else False
+    on_hand = _row_int(row, "on_hand", "on_hand_qty", "quantity_on_hand")
+    minimum = _row_int(row, "min_stock", "minimum_qty", "minimum_stock", "min_qty")
+    if row.get("below_min") is not None:
+        below_minimum = bool(row["below_min"])
+    else:
+        below_minimum = on_hand < minimum if minimum > 0 else False
     return below_minimum, on_hand, minimum
 
 
@@ -293,28 +296,24 @@ def _run_list_shipments(arguments: dict[str, Any]) -> tuple[str, str]:
     return json.dumps(result), "erp/shipments"
 
 
-_LOT_FIELDS = ("lot_id", "production_lot", "lot", "lot_number", "lot_code")
-_SKU_FIELDS = ("finished_sku", "sku", "product_sku", "sku_code", "product")
+_LOT_FIELDS = ("id", "lot_id", "production_lot", "lot", "lot_number", "lot_code")
+_SKU_FIELDS = ("sku", "finished_sku", "product_sku", "sku_code", "product")
 _COMPONENT_SKU_FIELDS = (
+    "raw_sku",
     "component_sku",
     "raw_material_sku",
     "material_sku",
     "component",
-    "sku",
 )
 _COMPONENT_NAME_FIELDS = (
+    "description",
     "component_name",
     "raw_material_name",
     "material_name",
     "name",
-    "description",
 )
-_SUPPLIER_ID_FIELDS = ("supplier_id", "supplier_code", "vendor_id")
-# Strict fields for rows that are NOT supplier records (BOM / inventory): a bare
-# "name" there is the material name, never the supplier.
-_SUPPLIER_NAME_FIELDS = ("supplier_name", "supplier", "vendor_name", "vendor")
-# Supplier-endpoint rows: a bare "name" is the supplier name.
-_SUPPLIER_ROW_NAME_FIELDS = ("supplier_name", "name", "vendor_name", "vendor")
+_SUPPLIER_ID_FIELDS = ("id", "supplier_id", "supplier_code", "vendor_id")
+_SUPPLIER_ROW_NAME_FIELDS = ("name", "supplier_name", "vendor_name", "vendor")
 _VALID_CATEGORIES = ("semolina", "wheat", "packaging", "labels", "ink", "logistics")
 
 
@@ -346,15 +345,28 @@ def _bom_component_fields(row: dict[str, Any]) -> tuple[str | None, str | None]:
     return _row_str(row, *_COMPONENT_SKU_FIELDS), _row_str(row, *_COMPONENT_NAME_FIELDS)
 
 
-def _select_bom_row(
-    rows: list[dict[str, Any]], material_category: str | None
+def _flatten_bom_components(bom_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Expand nested BOM API rows into flat component dicts."""
+    components: list[dict[str, Any]] = []
+    for row in bom_rows:
+        nested = row.get("components")
+        if isinstance(nested, list) and nested:
+            components.extend(nested)
+        else:
+            components.append(row)
+    return components
+
+
+def _select_bom_component(
+    bom_rows: list[dict[str, Any]], material_category: str | None
 ) -> dict[str, Any] | None:
-    if not rows:
+    components = _flatten_bom_components(bom_rows)
+    if not components:
         return None
     if material_category:
         category = material_category.strip().lower()
         code = category[:3].upper()
-        for row in rows:
+        for row in components:
             sku, name = _bom_component_fields(row)
             row_category = str(row.get("category") or "").lower()
             if row_category == category:
@@ -363,12 +375,11 @@ def _select_bom_row(
                 return row
             if name and category in name.lower():
                 return row
-    # Default: first row that looks like a raw material.
-    for row in rows:
+    for row in components:
         sku, _ = _bom_component_fields(row)
         if sku and sku.upper().startswith("RAW-"):
             return row
-    return rows[0]
+    return components[0]
 
 
 def _category_for_material(raw_material_sku: str | None, material_category: str | None) -> str | None:
@@ -393,23 +404,9 @@ def _category_for_material(raw_material_sku: str | None, material_category: str 
 
 
 def _resolve_supplier(
-    bom_row: dict[str, Any],
-    inventory_row: dict[str, Any] | None,
     raw_material_sku: str | None,
     material_category: str | None,
 ) -> tuple[str | None, str | None]:
-    # 1. Supplier fields already present on the BOM row.
-    sid = _row_str(bom_row, *_SUPPLIER_ID_FIELDS)
-    sname = _row_str(bom_row, *_SUPPLIER_NAME_FIELDS)
-    if sname:
-        return sid, sname
-    # 2. Supplier fields on the matched raw-material inventory row.
-    if inventory_row:
-        sid = _row_str(inventory_row, *_SUPPLIER_ID_FIELDS)
-        sname = _row_str(inventory_row, *_SUPPLIER_NAME_FIELDS)
-        if sname:
-            return sid, sname
-    # 3. Targeted supplier lookup, filtered by category when known.
     category = _category_for_material(raw_material_sku, material_category)
     params: dict[str, str] = {}
     if category and category in _VALID_CATEGORIES:
@@ -418,7 +415,6 @@ def _resolve_supplier(
     rows = payload.get("data") or []
     if not rows:
         return None, None
-    # Prefer a supplier whose row references the raw material; else first match.
     if raw_material_sku:
         target = raw_material_sku.upper()
         for row in rows:
@@ -478,27 +474,25 @@ def _run_resolve_bom_supplier_stock(arguments: dict[str, Any]) -> tuple[str, str
 
     bom_payload = get_client().get("/erp/bom", params={"sku": finished_sku})
     bom_rows = bom_payload.get("data") or []
-    bom_row = _select_bom_row(bom_rows, material_category)
-    if not bom_row:
+    component = _select_bom_component(bom_rows, material_category)
+    if not component:
         return _not_found_chain(
             lot_id, finished_sku, f"No bill of materials rows found for {finished_sku}."
         )
 
-    raw_material_sku, raw_material_name = _bom_component_fields(bom_row)
+    raw_material_sku, raw_material_name = _bom_component_fields(component)
     if not raw_material_sku:
         return _not_found_chain(
             lot_id, finished_sku, "BOM row did not expose a raw material SKU."
         )
 
     inventory_row = _resolve_raw_material_inventory(raw_material_sku)
-    supplier_id, supplier_name = _resolve_supplier(
-        bom_row, inventory_row, raw_material_sku, material_category
-    )
+    supplier_id, supplier_name = _resolve_supplier(raw_material_sku, material_category)
 
     if inventory_row:
         below_minimum, on_hand, minimum = _compute_inventory_status(inventory_row)
         if not raw_material_name:
-            raw_material_name = inventory_row.get("name")
+            raw_material_name = inventory_row.get("description") or inventory_row.get("name")
     else:
         below_minimum, on_hand, minimum = None, None, None
 

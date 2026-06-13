@@ -165,6 +165,11 @@ def _row_amount(row: dict[str, Any], *keys: str) -> float:
     return 0.0
 
 
+def _customer_id(row: dict[str, Any]) -> str | None:
+    cid = row.get("customer_id") or row.get("id")
+    return str(cid) if cid else None
+
+
 def _extract_customer_channel(payload: dict[str, Any]) -> str | None:
     record = payload.get("data") if isinstance(payload.get("data"), dict) else payload
     if not isinstance(record, dict):
@@ -178,7 +183,7 @@ def _row_channel(
     channel = row.get("customer_channel") or row.get("channel")
     if channel:
         return channel
-    customer_id = row.get("customer_id")
+    customer_id = _customer_id(row)
     if not customer_id:
         return None
     if customer_id not in cache:
@@ -239,8 +244,8 @@ def _run_list_opportunities(arguments: dict[str, Any]) -> tuple[str, str]:
     if stage := arguments.get("stage"):
         params["stage"] = stage
 
-    payload = get_client().get("/crm/opportunities", params=params or None)
-    rows = payload.get("data") or []
+    client = get_client()
+    rows = client.get_all_pages("/crm/opportunities", params=params or None)
 
     if stage:
         count = len(rows)
@@ -254,7 +259,7 @@ def _run_list_opportunities(arguments: dict[str, Any]) -> tuple[str, str]:
         "opportunities_sample": rows[:SAMPLE_CAP],
         "note": (
             "Open opportunities use stages qualification and negotiation unless "
-            "a specific stage filter was applied."
+            "a specific stage filter was applied. Totals computed across all pages."
         ),
     }
     return json.dumps(result), "crm/opportunities"
@@ -289,13 +294,13 @@ def _run_list_orders(arguments: dict[str, Any]) -> tuple[str, str]:
     if to_date := arguments.get("to"):
         params["to"] = to_date
 
-    payload = get_client().get("/crm/orders", params=params or None)
-    rows = payload.get("data") or []
-    total = sum(_row_amount(row, "total_value_eur", "value_eur", "value") for row in rows)
+    rows = get_client().get_all_pages("/crm/orders", params=params or None)
+    total = sum(_row_amount(row, "total_eur", "total_value_eur", "value_eur", "value") for row in rows)
     result = {
         "count": len(rows),
         "total_value_eur": total,
         "orders_sample": rows[:SAMPLE_CAP],
+        "note": "Totals computed across all pages of /crm/orders.",
     }
     return json.dumps(result), "crm/orders"
 
@@ -311,13 +316,13 @@ def _run_list_invoices(arguments: dict[str, Any]) -> tuple[str, str]:
     if to_date := arguments.get("to"):
         params["to"] = to_date
 
-    payload = get_client().get("/crm/invoices", params=params or None)
-    rows = payload.get("data") or []
+    rows = get_client().get_all_pages("/crm/invoices", params=params or None)
     total = sum(_row_amount(row, "amount_eur", "total_amount", "amount") for row in rows)
     result = {
         "count": len(rows),
         "total_amount_eur": total,
         "invoices_sample": rows[:SAMPLE_CAP],
+        "note": "Totals computed across all pages of /crm/invoices.",
     }
     return json.dumps(result), "crm/invoices"
 

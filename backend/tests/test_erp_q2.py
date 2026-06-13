@@ -15,10 +15,11 @@ Q2_QUESTION = (
 
 INVENTORY_ROW = {
     "sku": "PAS-PEN-500",
-    "name": "Penne Rigate n.73 - 500g box",
+    "description": "Penne Rigate n.73 - 500g box",
     "type": "finished_good",
-    "on_hand_qty": 462,
-    "minimum_qty": 2000,
+    "on_hand": 462,
+    "min_stock": 2000,
+    "below_min": True,
     "unit": "cartons",
 }
 

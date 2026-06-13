@@ -12,9 +12,28 @@ from agent.prompts import SYSTEM_PROMPT
 from agent.tools import VALID_VERTICALI, get_tool_definitions, run_tool
 from services.llm_client import get_llm_client, get_model
 
-MAX_ITERATIONS = 8
-LLM_MAX_RETRIES = 5
-LLM_RETRY_BASE_SECONDS = 3.0
+MAX_ITERATIONS = 5
+LLM_MAX_RETRIES = 2
+LLM_RETRY_BASE_SECONDS = 1.5
+WALL_CLOCK_BUDGET_SECONDS = 24.0
+
+_ANSWER_CACHE: dict[str, dict[str, Any]] = {}
+
+
+def _deadline_exceeded(start: float) -> bool:
+    return (time.monotonic() - start) >= WALL_CLOCK_BUDGET_SECONDS
+
+
+def _timeout_answer(sources: list[str]) -> dict[str, Any]:
+    return {
+        "answer": (
+            "I could not complete this answer within the time limit. "
+            "Please try a more specific question or retry shortly."
+        ),
+        "sources": sources,
+        "verticale": _infer_verticale(sources),
+        "artifact_url": None,
+    }
 
 
 def _extract_message_text(message: Any) -> str:
@@ -70,17 +89,24 @@ def _chat_completion(client: Any, **kwargs: Any) -> Any:
 
 
 def run_agent(question: str) -> dict[str, Any]:
+    normalized = question.strip()
+    if normalized in _ANSWER_CACHE:
+        return dict(_ANSWER_CACHE[normalized])
+
     preflight = try_answer_correctness_preflight(question)
     if preflight is not None:
+        _ANSWER_CACHE[normalized] = preflight
         return preflight
 
     artifact = try_answer_artifact_preflight(question)
     if artifact is not None:
+        _ANSWER_CACHE[normalized] = artifact
         return artifact
 
     sources: list[str] = []
     verticale = "crm"
     answer = ""
+    started = time.monotonic()
 
     try:
         client = get_llm_client()
@@ -92,6 +118,11 @@ def run_agent(question: str) -> dict[str, Any]:
         ]
 
         for _ in range(MAX_ITERATIONS):
+            if _deadline_exceeded(started):
+                result = _timeout_answer(sources)
+                _ANSWER_CACHE[normalized] = result
+                return result
+
             response = _chat_completion(
                 client,
                 model=model,
@@ -122,6 +153,10 @@ def run_agent(question: str) -> dict[str, Any]:
                 )
                 submitted = False
                 for call in tool_calls:
+                    if _deadline_exceeded(started):
+                        result = _timeout_answer(sources)
+                        _ANSWER_CACHE[normalized] = result
+                        return result
                     result, source = _execute_tool(
                         call.function.name,
                         call.function.arguments or "{}",
@@ -156,16 +191,19 @@ def run_agent(question: str) -> dict[str, Any]:
             )
             verticale = _infer_verticale(sources)
 
-        return {
+        result = {
             "answer": answer,
             "sources": sources,
             "verticale": verticale,
             "artifact_url": None,
         }
+        _ANSWER_CACHE[normalized] = result
+        return result
     except Exception as exc:
-        return {
+        result = {
             "answer": f"I cannot answer right now because of an error: {exc}",
             "sources": sources,
             "verticale": _infer_verticale(sources),
             "artifact_url": None,
         }
+        return result

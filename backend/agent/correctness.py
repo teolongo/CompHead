@@ -28,8 +28,8 @@ _LOT_RE = re.compile(r"\bLOT-\d{4}-\d{4}\b", re.IGNORECASE)
 
 # Financial metrics that are not stored on lots/orders/inventory anywhere.
 _UNSUPPORTED_METRIC_RE = re.compile(
-    r"\b(profit\s*margin|profit|margins?|markups?|profitability|"
-    r"cost of goods|cogs|production\s*cost|cost)\b",
+    r"\b(profit\s*margin|profitability|margins?|markups?|"
+    r"cost of goods|cogs|production\s*cost)\b",
     re.IGNORECASE,
 )
 
@@ -194,7 +194,7 @@ def _resolve_call_customer(question: str) -> tuple[str | None, bool]:
     if not rows:
         return None, True
     first = rows[0]
-    return (first.get("customer_id") or first.get("id")), True
+    return (first.get("id") or first.get("customer_id")), True
 
 
 def _latest_call_id(customer_id: str) -> str | None:

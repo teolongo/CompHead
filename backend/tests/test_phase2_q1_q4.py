@@ -96,10 +96,7 @@ def test_list_opportunities_cust_0132_open_stats(mock_get_client: MagicMock) -> 
     from agent.tools.crm import run_crm_tool
 
     mock_client = MagicMock()
-    mock_client.get.return_value = {
-        "data": OPPORTUNITY_ROWS,
-        "pagination": {"total": 5, "offset": 0, "limit": 50},
-    }
+    mock_client.get_all_pages.return_value = OPPORTUNITY_ROWS
     mock_get_client.return_value = mock_client
 
     result_json, source = run_crm_tool("list_opportunities", {"customer_id": "CUST-0132"})
@@ -108,7 +105,7 @@ def test_list_opportunities_cust_0132_open_stats(mock_get_client: MagicMock) -> 
     assert source == "crm/opportunities"
     assert result["count"] == 4
     assert result["total_value_eur"] == 740000
-    mock_client.get.assert_called_once_with(
+    mock_client.get_all_pages.assert_called_once_with(
         "/crm/opportunities",
         params={"customer_id": "CUST-0132"},
     )

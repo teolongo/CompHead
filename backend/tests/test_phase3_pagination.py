@@ -121,43 +121,41 @@ def test_list_opportunities_group_by_channel_pages_and_sums() -> None:
 
 BROKEN_IDS = {f"CALL-{i:05d}" for i in range(1, 10)}  # exactly 9 calls match
 ALL_CALLS = [
-    {"call_id": f"CALL-{i:05d}", "type": "support", "outcome": "complaint_open"}
+    {
+        "call_id": f"CALL-{i:05d}",
+        "id": f"CALL-{i:05d}",
+        "type": "support",
+        "outcome": "complaint_open",
+        "topic": "quality complaint - broken pasta" if f"CALL-{i:05d}" in BROKEN_IDS else "order follow-up",
+        "summary": (
+            f"Customer reports broken pasta on lot LOT-2026-{i:04d}"
+            if f"CALL-{i:05d}" in BROKEN_IDS
+            else "Routine order status check"
+        ),
+    }
     for i in range(1, 81)
 ]
 
 
 def test_count_calls_by_defect_pages_all_calls_and_counts_in_python() -> None:
-    """Q11: page all 80 calls, targeted transcript search, exact count 9 in Python."""
+    """Q11: page all 80 calls, match defect in metadata, exact count 9 in Python."""
     from agent.tools.calls import run_calls_tool
 
     def calls_get(path: str, params: dict | None = None) -> dict:
-        if path == "/calls":
-            assert params is not None
-            assert params["limit"] == 200
-            offset = params.get("offset", 0)
-            if offset == 0:
-                return {
-                    "data": ALL_CALLS[:50],
-                    "pagination": {"offset": 0, "limit": 200, "total": 80},
-                }
-            assert offset == 50
+        assert path == "/calls"
+        assert params is not None
+        assert params["limit"] == 200
+        offset = params.get("offset", 0)
+        if offset == 0:
             return {
-                "data": ALL_CALLS[50:80],
-                "pagination": {"offset": 50, "limit": 200, "total": 80},
+                "data": ALL_CALLS[:50],
+                "pagination": {"offset": 0, "limit": 200, "total": 80},
             }
-        # Transcript endpoint: must always use a targeted search, never full download.
-        assert path.endswith("/transcript")
-        assert params is not None and params.get("search")
-        call_id = path.split("/")[2]
-        if call_id in BROKEN_IDS:
-            return {
-                "call_id": call_id,
-                "segments": [
-                    {"speaker": "customer", "text": "the box arrived with broken pasta inside"}
-                ],
-                "pagination": {"offset": 0, "limit": 20, "total": 1},
-            }
-        return {"call_id": call_id, "segments": [], "pagination": {"offset": 0, "limit": 20, "total": 0}}
+        assert offset == 50
+        return {
+            "data": ALL_CALLS[50:80],
+            "pagination": {"offset": 50, "limit": 200, "total": 80},
+        }
 
     client = _make_client(calls_get)
     with patch("agent.tools.calls.get_client", return_value=client):
@@ -172,7 +170,6 @@ def test_count_calls_by_defect_pages_all_calls_and_counts_in_python() -> None:
     assert result["count"] == 9
     assert result["searched_call_count"] == 80
     assert len(result["matching_call_ids_sample"]) <= 10
-    # Second page of /calls was fetched.
     list_offsets = [
         (call.args[1] if len(call.args) > 1 else call.kwargs.get("params")) or {}
         for call in client.get.call_args_list

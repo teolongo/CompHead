@@ -19,7 +19,7 @@ class MockApiClient:
     def __init__(self, settings: Settings) -> None:
         self._base_url = settings.MOCK_API_BASE_URL.rstrip("/")
         self._token = settings.MOCK_API_TOKEN
-        self._client = httpx.Client(timeout=30.0)
+        self._client = httpx.Client(timeout=10.0)
 
     def get(self, path: str, params: dict | None = None) -> dict:
         url = f"{self._base_url}{path if path.startswith('/') else f'/{path}'}"
