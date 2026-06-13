@@ -1,0 +1,13 @@
+# Keep the Railway upload minimal — exclude local-only and generated files.
+.venv/
+venv/
+env/
+__pycache__/
+*.pyc
+.pytest_cache/
+.env
+.env.*
+
+# Generated artifacts (regenerated at runtime)
+static/files/*
+!static/files/.gitkeep

@@ -23,4 +23,11 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=9.0.3",
+    "pytest-timeout>=2.3.1",
 ]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: live LLM and mock API tests (paced to avoid rate limits)",
+]
+addopts = "-ra"
