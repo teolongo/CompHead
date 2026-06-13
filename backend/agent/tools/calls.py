@@ -82,6 +82,40 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "count_calls_by_defect",
+            "description": (
+                "Count how many calls report a specific defect or complaint phrase "
+                "(e.g. 'broken pasta') across ALL recorded calls. Pages through the "
+                "entire call log and runs a targeted transcript search per call, then "
+                "returns the exact count computed in Python. Use this for "
+                "'how many calls mention X' aggregate questions."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "defect": {
+                        "type": "string",
+                        "description": "Defect or complaint phrase to count, e.g. 'broken pasta'",
+                    },
+                    "outcome": {
+                        "type": "string",
+                        "enum": [
+                            "complaint_open",
+                            "follow_up",
+                            "order_placed",
+                            "resolved",
+                        ],
+                        "description": "Optional outcome filter to narrow candidate calls",
+                    },
+                },
+                "required": ["defect"],
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -173,9 +207,59 @@ def _run_search_transcript(arguments: dict[str, Any]) -> tuple[str, str]:
     return json.dumps(result), f"calls/{call_id}/transcript"
 
 
+MATCHING_IDS_SAMPLE_CAP = 10
+
+
+def _segments_match_defect(segments: list[dict[str, Any]], defect: str) -> bool:
+    combined = " ".join(str(segment.get("text") or "") for segment in segments).lower()
+    if not combined:
+        return False
+    words = [word for word in defect.lower().split() if word]
+    return all(word in combined for word in words)
+
+
+def _run_count_calls_by_defect(arguments: dict[str, Any]) -> tuple[str, str]:
+    defect = arguments.get("defect")
+    if not defect:
+        raise ValueError("count_calls_by_defect requires a defect argument")
+
+    client = get_client()
+    params: dict[str, str] = {}
+    if outcome := arguments.get("outcome"):
+        params["outcome"] = outcome
+
+    calls = client.get_all_pages("/calls", params=params or None)
+
+    matching_ids: list[str] = []
+    searched = 0
+    for call in calls:
+        call_id = _call_id(call)
+        if not call_id:
+            continue
+        searched += 1
+        payload = client.get(
+            f"/calls/{call_id}/transcript",
+            params={"search": defect},
+        )
+        segments = (payload.get("segments") or [])[:SEGMENT_CAP]
+        if _segments_match_defect(segments, defect):
+            matching_ids.append(call_id)
+
+    result = {
+        "defect": defect,
+        "count": len(matching_ids),
+        "searched_call_count": searched,
+        "matching_call_ids_sample": matching_ids[:MATCHING_IDS_SAMPLE_CAP],
+        "note": "Count computed in Python after paging all calls and targeted transcript search.",
+    }
+    return json.dumps(result), "calls"
+
+
 def run_calls_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
     if name == "list_calls":
         return _run_list_calls(arguments)
     if name == "search_transcript":
         return _run_search_transcript(arguments)
+    if name == "count_calls_by_defect":
+        return _run_count_calls_by_defect(arguments)
     raise ValueError(f"Unknown Calls tool: {name}")
