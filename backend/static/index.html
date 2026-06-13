@@ -3,26 +3,731 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Al Dente - Company Brain</title>
+  <title>Al Dente — Company Brain</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;1,9..40,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
   <style>
-    body { margin:0; background:#14120B; color:#ece8dd; display:grid; min-height:100vh;
-      place-items:center; font:16px/1.6 ui-sans-serif, system-ui, sans-serif; }
-    main { max-width:560px; padding:24px; }
-    h1 { font-size:22px; margin:0 0 4px; }
-    .tag { font:11px/1 ui-monospace, monospace; letter-spacing:.18em; text-transform:uppercase; color:#F54E00; }
-    p { color:#9b9684; }
-    code { color:#ece8dd; background:#1c1a12; border:1px solid #2e2b20; border-radius:5px; padding:2px 6px; }
+    :root {
+      --bg-base: #14120B;
+      --bg-elevated: #1c1a12;
+      --border: #2e2b20;
+      --text-primary: #ece8dd;
+      --text-muted: #9b9684;
+      --accent-tomato: #F54E00;
+      --accent-gold: #E8B84A;
+      --accent-basil: #4ADE80;
+      --accent-ai: #7DD3FC;
+      --font-display: "DM Sans", system-ui, sans-serif;
+      --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+      --radius: 10px;
+      --transition: 150ms ease;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font: 16px/1.55 var(--font-display);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html { scroll-behavior: auto; }
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 20px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(20, 18, 11, 0.92);
+      backdrop-filter: blur(8px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+    .brand .tag {
+      font: 10px/1 var(--font-mono);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--accent-tomato);
+    }
+    .logo svg { display: block; }
+
+    .graph-toggle {
+      display: none;
+      min-height: 44px;
+      padding: 0 16px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: var(--bg-elevated);
+      color: var(--text-primary);
+      font: 500 13px var(--font-display);
+      cursor: pointer;
+      transition: border-color var(--transition), color var(--transition);
+    }
+    .graph-toggle:hover { border-color: var(--accent-tomato); color: var(--accent-tomato); }
+    .graph-toggle:focus-visible { outline: 2px solid var(--accent-ai); outline-offset: 2px; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 1fr 1.1fr;
+      grid-template-rows: auto 1fr;
+      gap: 0;
+      min-height: calc(100vh - 57px);
+    }
+
+    .hero-panel {
+      grid-column: 1 / -1;
+      position: relative;
+      height: 200px;
+      overflow: hidden;
+      border-bottom: 1px solid var(--border);
+      background: radial-gradient(ellipse 80% 120% at 50% 0%, #2a1f12 0%, var(--bg-base) 70%);
+    }
+    #hero-canvas { width: 100%; height: 100%; display: block; }
+    .hero-fallback {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      opacity: 0.35;
+    }
+    .hero-fallback svg { width: 180px; height: 80px; }
+
+    .chat-column {
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      min-height: 0;
+    }
+    .graph-panel {
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-elevated);
+      min-height: 0;
+    }
+    .panel-head {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font: 500 11px var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .chat-thread {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .bubble {
+      max-width: 92%;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      animation: rise 300ms ease both;
+    }
+    @keyframes rise {
+      from { opacity: 0; transform: translateY(8px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: #2a2218;
+      border: 1px solid var(--border);
+    }
+    .bubble.assistant {
+      align-self: flex-start;
+      background: var(--bg-elevated);
+      border: 1px solid var(--border);
+    }
+    .bubble .answer-text {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 10px;
+      align-items: center;
+    }
+    .chip {
+      font: 11px var(--font-mono);
+      padding: 3px 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+    .chip.source { color: var(--accent-ai); border-color: rgba(125, 211, 252, 0.35); }
+    .chip.kb { color: var(--accent-basil); border-color: rgba(74, 222, 128, 0.35); }
+    .badge-vert {
+      font: 600 10px var(--font-mono);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+    }
+    .badge-vert.crm { background: rgba(245, 78, 0, 0.2); color: var(--accent-tomato); }
+    .badge-vert.erp { background: rgba(232, 184, 74, 0.2); color: var(--accent-gold); }
+    .badge-vert.calls { background: rgba(125, 211, 252, 0.15); color: var(--accent-ai); }
+    .badge-vert.kb { background: rgba(74, 222, 128, 0.15); color: var(--accent-basil); }
+
+    .artifact-card {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      border: 1px dashed var(--accent-gold);
+      background: rgba(232, 184, 74, 0.06);
+    }
+    .artifact-card a {
+      color: var(--accent-gold);
+      font-weight: 600;
+      text-decoration: none;
+    }
+    .artifact-card a:hover { text-decoration: underline; }
+
+    .deck-frame {
+      width: 100%;
+      min-height: 280px;
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      background: #0f0e0a;
+    }
+
+    .chat-input-area {
+      padding: 12px 16px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 10px;
+      align-items: flex-end;
+    }
+    .chat-input-area textarea {
+      flex: 1;
+      min-height: 48px;
+      max-height: 120px;
+      resize: vertical;
+      padding: 12px 14px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font: inherit;
+    }
+    .chat-input-area textarea:focus {
+      outline: 2px solid var(--accent-tomato);
+      outline-offset: 1px;
+    }
+    .btn-ask {
+      min-height: 48px;
+      min-width: 88px;
+      padding: 0 20px;
+      border: none;
+      border-radius: var(--radius);
+      background: var(--accent-tomato);
+      color: #fff;
+      font: 600 14px var(--font-display);
+      cursor: pointer;
+      transition: filter var(--transition), transform var(--transition);
+    }
+    .btn-ask:hover:not(:disabled) { filter: brightness(1.08); }
+    .btn-ask:disabled { opacity: 0.55; cursor: not-allowed; }
+    .btn-ask:focus-visible { outline: 2px solid var(--accent-ai); outline-offset: 2px; }
+
+    .sidebar {
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      background: rgba(0,0,0,0.15);
+    }
+    .sidebar h3 {
+      margin: 0 0 10px;
+      font: 500 11px var(--font-mono);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+    .prompt-grid {
+      display: grid;
+      gap: 8px;
+    }
+    .prompt-card {
+      text-align: left;
+      padding: 10px 12px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg-base);
+      color: var(--text-primary);
+      font: 13px/1.4 var(--font-display);
+      cursor: pointer;
+      transition: border-color var(--transition), transform var(--transition);
+    }
+    .prompt-card:hover {
+      border-color: var(--accent-tomato);
+      transform: translateY(-1px);
+    }
+    .prompt-card .pc-tag {
+      display: block;
+      font: 10px var(--font-mono);
+      color: var(--accent-tomato);
+      margin-bottom: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    #graph-svg {
+      flex: 1;
+      width: 100%;
+      min-height: 320px;
+    }
+    .graph-node { cursor: pointer; transition: opacity 200ms; }
+    .graph-node.dim { opacity: 0.25; }
+    .graph-node.highlight circle,
+    .graph-node.highlight rect,
+    .graph-node.highlight polygon { stroke: var(--accent-ai); stroke-width: 2.5px; filter: drop-shadow(0 0 6px rgba(125,211,252,0.6)); }
+    .graph-edge { stroke: #4a4538; stroke-width: 1px; fill: none; opacity: 0.5; transition: opacity 200ms, stroke 200ms; }
+    .graph-edge.highlight { stroke: var(--accent-ai); opacity: 1; stroke-width: 2px; }
+    .graph-edge.dim { opacity: 0.08; }
+    .graph-legend {
+      padding: 8px 16px 12px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      font: 11px var(--font-mono);
+      color: var(--text-muted);
+    }
+    .legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
+    .graph-error {
+      padding: 24px;
+      color: var(--text-muted);
+      text-align: center;
+    }
+
+    @media (max-width: 768px) {
+      .layout { grid-template-columns: 1fr; }
+      .graph-panel { display: none; }
+      .graph-panel.open { display: flex; position: fixed; inset: 57px 0 0; z-index: 40; }
+      .graph-toggle { display: inline-flex; align-items: center; }
+      .chat-column { border-right: none; }
+      .hero-panel { height: 100px; }
+      .sidebar .prompt-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (min-width: 769px) {
+      .sidebar .prompt-grid { grid-template-columns: 1fr 1fr; }
+    }
   </style>
 </head>
 <body>
-  <main>
-    <span class="tag">placeholder</span>
-    <h1>Al Dente - Company Brain</h1>
-    <p>Nothing here yet - building a minimal UI is part of the challenge. It must exist and
-    work (a way to send a question to <code>POST /ask</code> and read the answer), but looks
-    are <strong>not graded</strong>: keep it simple and spend your time on the agent.</p>
-    <p>Replace this file (<code>backend/static/index.html</code>) or serve your own frontend.
-    See <code>BRIEF.md</code> and <code>AGENTS.md</code>.</p>
-  </main>
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">
+        <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M6 28C6 28 10 8 18 8C26 8 30 28 30 28" stroke="#F54E00" stroke-width="2.5" stroke-linecap="round"/>
+          <circle cx="18" cy="8" r="4" fill="#7DD3FC"/>
+          <circle cx="18" cy="8" r="2" fill="#14120B"/>
+        </svg>
+      </div>
+      <div>
+        <span class="tag">Al Dente S.r.l.</span>
+        <h1>Company Brain</h1>
+      </div>
+    </div>
+    <button type="button" class="graph-toggle" id="graph-toggle" aria-expanded="false">Knowledge graph</button>
+  </header>
+
+  <div class="layout">
+    <section class="hero-panel" aria-hidden="true">
+      <canvas id="hero-canvas"></canvas>
+      <div class="hero-fallback" id="hero-fallback">
+        <svg viewBox="0 0 200 60"><path d="M10 50 Q60 10 100 30 T190 40" stroke="#F54E00" stroke-width="2" fill="none" opacity="0.5"/></svg>
+      </div>
+    </section>
+
+    <section class="chat-column">
+      <div class="panel-head">Ask the company brain</div>
+      <div class="chat-thread" id="chat-thread" aria-live="polite"></div>
+      <div class="sidebar">
+        <h3>Sample prompts</h3>
+        <div class="prompt-grid" id="prompt-grid"></div>
+      </div>
+      <form class="chat-input-area" id="ask-form">
+        <textarea id="question-input" rows="2" placeholder="Ask about customers, inventory, calls, or policies…" aria-label="Question"></textarea>
+        <button type="submit" class="btn-ask" id="ask-btn">Ask</button>
+      </form>
+    </section>
+
+    <section class="graph-panel" id="graph-panel">
+      <div class="panel-head">Knowledge graph</div>
+      <svg id="graph-svg" role="img" aria-label="Company knowledge graph"></svg>
+      <div class="graph-legend">
+        <span><span class="legend-dot" style="background:#F54E00"></span>customer</span>
+        <span><span class="legend-dot" style="background:#E8B84A"></span>product</span>
+        <span><span class="legend-dot" style="background:#7DD3FC"></span>supplier</span>
+        <span><span class="legend-dot" style="background:#4ADE80"></span>material</span>
+      </div>
+    </section>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+  <script>
+    const SAMPLE_PROMPTS = [
+      {
+        tag: "CRM",
+        text: "How many open opportunities does Primato Supermercati S.p.A. (CUST-0132) have, and what is their total value?"
+      },
+      {
+        tag: "Deck",
+        text: "Generate a 4-slide HTML deck for the sales rep visiting Primato Supermercati S.p.A. (CUST-0132): profile, open deals, order/lot status, recent call complaints."
+      },
+      {
+        tag: "ERP",
+        text: "What is the on-hand quantity of PAS-SPA-500 and is it below minimum stock?"
+      },
+      {
+        tag: "KB",
+        text: "What is the shelf life and allergen information for PAS-SPA-500?"
+      }
+    ];
+
+    const KIND_COLORS = {
+      customer: "#F54E00",
+      product: "#E8B84A",
+      supplier: "#7DD3FC",
+      material: "#4ADE80"
+    };
+
+    let graphData = { nodes: [], edges: [] };
+    let reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let heroAnimId = null;
+
+    function escapeHtml(s) {
+      const d = document.createElement("div");
+      d.textContent = s;
+      return d.innerHTML;
+    }
+
+    function isHtmlAnswer(text) {
+      const t = (text || "").trim().slice(0, 20).toLowerCase();
+      return t.startsWith("<!doctype") || t.startsWith("<html");
+    }
+
+    function initPrompts() {
+      const grid = document.getElementById("prompt-grid");
+      SAMPLE_PROMPTS.forEach(p => {
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "prompt-card";
+        btn.innerHTML = `<span class="pc-tag">${escapeHtml(p.tag)}</span>${escapeHtml(p.text)}`;
+        btn.addEventListener("click", () => {
+          document.getElementById("question-input").value = p.text;
+          document.getElementById("question-input").focus();
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    function appendBubble(role, html) {
+      const thread = document.getElementById("chat-thread");
+      const el = document.createElement("div");
+      el.className = `bubble ${role}`;
+      el.innerHTML = html;
+      thread.appendChild(el);
+      thread.scrollTop = thread.scrollHeight;
+    }
+
+    function renderMeta(sources, verticale, artifactUrl) {
+      let html = `<div class="meta-row"><span class="badge-vert ${escapeHtml(verticale)}">${escapeHtml(verticale)}</span>`;
+      (sources || []).forEach(s => {
+        const cls = s.startsWith("DOC-") ? "chip kb" : "chip source";
+        html += `<span class="${cls}">${escapeHtml(s)}</span>`;
+      });
+      html += "</div>";
+      if (artifactUrl) {
+        html += `<div class="artifact-card">📄 <a href="${escapeHtml(artifactUrl)}" target="_blank" rel="noopener">Download artifact</a></div>`;
+      }
+      return html;
+    }
+
+    async function askQuestion(question) {
+      appendBubble("user", escapeHtml(question));
+      const btn = document.getElementById("ask-btn");
+      btn.disabled = true;
+      btn.textContent = "…";
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 32000);
+
+      try {
+        const res = await fetch("/ask", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ question }),
+          signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const data = await res.json();
+
+        let body;
+        if (isHtmlAnswer(data.answer)) {
+          body = `<iframe class="deck-frame" sandbox="allow-same-origin" srcdoc="${escapeHtml(data.answer)}" title="HTML deck"></iframe>`;
+        } else {
+          body = `<div class="answer-text">${escapeHtml(data.answer)}</div>`;
+        }
+        body += renderMeta(data.sources, data.verticale, data.artifact_url);
+        appendBubble("assistant", body);
+        highlightGraph(data.sources || [], data.verticale);
+      } catch (err) {
+        const msg = err.name === "AbortError"
+          ? "Request timed out (>30s). Try a simpler question."
+          : "Could not reach the server. Is the backend running?";
+        appendBubble("assistant", `<div class="answer-text">${escapeHtml(msg)}</div>`);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Ask";
+      }
+    }
+
+    document.getElementById("ask-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const input = document.getElementById("question-input");
+      const q = input.value.trim();
+      if (!q) return;
+      askQuestion(q);
+      input.value = "";
+    });
+
+    document.getElementById("graph-toggle").addEventListener("click", () => {
+      const panel = document.getElementById("graph-panel");
+      const open = panel.classList.toggle("open");
+      document.getElementById("graph-toggle").setAttribute("aria-expanded", String(open));
+    });
+
+    async function loadGraph() {
+      const svg = document.getElementById("graph-svg");
+      try {
+        const res = await fetch("/api/graph");
+        graphData = await res.json();
+        if (graphData.meta && graphData.meta.error) throw new Error(graphData.meta.error);
+        renderGraph(svg, graphData);
+      } catch {
+        svg.innerHTML = "";
+        const err = document.createElement("div");
+        err.className = "graph-error";
+        err.textContent = "Graph unavailable — chat still works.";
+        svg.parentElement.insertBefore(err, svg.nextSibling);
+      }
+    }
+
+    function renderGraph(svg, data) {
+      const nodes = data.nodes || [];
+      const edges = data.edges || [];
+      const w = svg.clientWidth || 600;
+      const h = svg.clientHeight || 400;
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+
+      const byKind = { customer: [], product: [], supplier: [], material: [] };
+      nodes.forEach(n => (byKind[n.kind] || byKind.material).push(n));
+
+      const positions = {};
+      let y = 40;
+      Object.entries(byKind).forEach(([kind, list]) => {
+        const cols = Math.max(1, Math.ceil(Math.sqrt(list.length)));
+        list.forEach((n, i) => {
+          const col = i % cols;
+          const row = Math.floor(i / cols);
+          positions[n.id] = {
+            x: 60 + col * (w - 120) / Math.max(cols - 1, 1),
+            y: y + row * 55
+          };
+        });
+        y += Math.ceil(list.length / cols) * 55 + 30;
+      });
+
+      svg.innerHTML = "";
+      const ns = "http://www.w3.org/2000/svg";
+
+      edges.forEach(e => {
+        const a = positions[e.source];
+        const b = positions[e.target];
+        if (!a || !b) return;
+        const line = document.createElementNS(ns, "line");
+        line.setAttribute("x1", a.x);
+        line.setAttribute("y1", a.y);
+        line.setAttribute("x2", b.x);
+        line.setAttribute("y2", b.y);
+        line.classList.add("graph-edge");
+        line.dataset.source = e.source;
+        line.dataset.target = e.target;
+        svg.appendChild(line);
+      });
+
+      nodes.forEach(n => {
+        const p = positions[n.id];
+        if (!p) return;
+        const g = document.createElementNS(ns, "g");
+        g.classList.add("graph-node");
+        g.dataset.id = n.id;
+        g.dataset.kind = n.kind;
+        g.setAttribute("transform", `translate(${p.x},${p.y})`);
+
+        const color = KIND_COLORS[n.kind] || "#888";
+        let shape;
+        if (n.kind === "customer") {
+          shape = document.createElementNS(ns, "circle");
+          shape.setAttribute("r", "14");
+          shape.setAttribute("fill", color);
+          shape.setAttribute("fill-opacity", "0.25");
+          shape.setAttribute("stroke", color);
+        } else if (n.kind === "product") {
+          shape = document.createElementNS(ns, "rect");
+          shape.setAttribute("x", "-16");
+          shape.setAttribute("y", "-12");
+          shape.setAttribute("width", "32");
+          shape.setAttribute("height", "24");
+          shape.setAttribute("rx", "6");
+          shape.setAttribute("fill", color);
+          shape.setAttribute("fill-opacity", "0.2");
+          shape.setAttribute("stroke", color);
+        } else if (n.kind === "supplier") {
+          shape = document.createElementNS(ns, "polygon");
+          shape.setAttribute("points", "0,-14 14,0 0,14 -14,0");
+          shape.setAttribute("fill", color);
+          shape.setAttribute("fill-opacity", "0.2");
+          shape.setAttribute("stroke", color);
+        } else {
+          shape = document.createElementNS(ns, "polygon");
+          shape.setAttribute("points", "0,-12 10,-4 10,8 0,14 -10,8 -10,-4");
+          shape.setAttribute("fill", color);
+          shape.setAttribute("fill-opacity", "0.2");
+          shape.setAttribute("stroke", color);
+        }
+        g.appendChild(shape);
+
+        const label = document.createElementNS(ns, "text");
+        label.setAttribute("y", "28");
+        label.setAttribute("text-anchor", "middle");
+        label.setAttribute("fill", "#9b9684");
+        label.setAttribute("font-size", "9");
+        label.textContent = (n.label || n.id).slice(0, 18);
+        g.appendChild(label);
+
+        svg.appendChild(g);
+      });
+    }
+
+    function highlightGraph(sources, verticale) {
+      const svg = document.getElementById("graph-svg");
+      const highlightIds = new Set();
+      const highlightKinds = new Set();
+
+      if (verticale === "crm" || verticale === "calls") highlightKinds.add("customer");
+      if (verticale === "erp") {
+        highlightKinds.add("product");
+        highlightKinds.add("material");
+        highlightKinds.add("supplier");
+      }
+
+      (sources || []).forEach(s => {
+        if (s.startsWith("crm/") || s.startsWith("calls")) highlightKinds.add("customer");
+        if (s.startsWith("erp/")) {
+          highlightKinds.add("product");
+          highlightKinds.add("material");
+          highlightKinds.add("supplier");
+        }
+        const cust = s.match(/CUST-\d+/i);
+        if (cust) highlightIds.add(`customer:${cust[0].toUpperCase()}`);
+        const sku = s.match(/PAS-[A-Z]{3}-\d{3}/i);
+        if (sku) highlightIds.add(`product:${sku[0].toUpperCase()}`);
+      });
+
+      const hasFilter = highlightIds.size > 0 || highlightKinds.size > 0;
+      svg.querySelectorAll(".graph-node").forEach(node => {
+        const match = highlightIds.has(node.dataset.id) || highlightKinds.has(node.dataset.kind);
+        node.classList.toggle("highlight", hasFilter && match);
+        node.classList.toggle("dim", hasFilter && !match);
+      });
+      svg.querySelectorAll(".graph-edge").forEach(edge => {
+        const src = edge.dataset.source;
+        const tgt = edge.dataset.target;
+        const srcNode = svg.querySelector(`.graph-node[data-id="${src}"]`);
+        const tgtNode = svg.querySelector(`.graph-node[data-id="${tgt}"]`);
+        const match = srcNode?.classList.contains("highlight") || tgtNode?.classList.contains("highlight");
+        edge.classList.toggle("highlight", hasFilter && match);
+        edge.classList.toggle("dim", hasFilter && !match);
+      });
+    }
+
+    function initHero() {
+      if (reducedMotion || window.innerWidth <= 768 || typeof THREE === "undefined") {
+        document.getElementById("hero-fallback").style.display = "flex";
+        return;
+      }
+      const canvas = document.getElementById("hero-canvas");
+      const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(45, 2, 0.1, 100);
+      camera.position.z = 4;
+
+      const geo = new THREE.TorusKnotGeometry(0.55, 0.12, 64, 8);
+      const mat = new THREE.MeshBasicMaterial({ color: 0xf54e00, wireframe: true, transparent: true, opacity: 0.35 });
+      const mesh = new THREE.Mesh(geo, mat);
+      scene.add(mesh);
+
+      function resize() {
+        const w = canvas.clientWidth;
+        const h = canvas.clientHeight;
+        renderer.setSize(w, h, false);
+        camera.aspect = w / h;
+        camera.updateProjectionMatrix();
+      }
+      resize();
+      window.addEventListener("resize", resize);
+
+      function animate() {
+        heroAnimId = requestAnimationFrame(animate);
+        mesh.rotation.x += 0.003;
+        mesh.rotation.y += 0.005;
+        renderer.render(scene, camera);
+      }
+      animate();
+    }
+
+    initPrompts();
+    loadGraph();
+    initHero();
+  </script>
 </body>
 </html>
