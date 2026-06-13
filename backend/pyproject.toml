@@ -10,7 +10,7 @@ dependencies = [
     "uvicorn[standard]>=0.49.0",
     # --- Suggested extras: uncomment what you need, then run `uv sync` ---
     # RAG / retrieval over data/kb/ (pick your approach):
-    # "rank-bm25>=0.2.2",        # lightweight lexical retrieval, zero infra
+    "rank-bm25>=0.2.2",        # lightweight lexical retrieval, zero infra
     # "chromadb>=1.4.1",         # embedded vector store
     # "faiss-cpu>=1.13.2",       # in-memory vector index
     # Binary artifact generation (docx / pptx / pdf / xlsx questions):
