@@ -16,7 +16,7 @@
 - [ ] **CRM-01**: Search/list customers, opportunities, orders, invoices with filters
 - [x] **ERP-01**: Query production, inventory, suppliers, BOM, shipments
 - [x] **CALLS-01**: List calls; search transcripts surgically (not full download)
-- [ ] **KB-01**: Retrieve relevant KB documents by query
+- [x] **KB-01**: Retrieve relevant KB documents by query
 
 ### Data Correctness
 
