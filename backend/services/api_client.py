@@ -41,6 +41,42 @@ class MockApiClient:
             )
         return response.json()
 
+    def get_all_pages(
+        self,
+        path: str,
+        params: dict | None = None,
+        limit: int = 200,
+        data_key: str = "data",
+    ) -> list[dict]:
+        """Page through a list endpoint, following ``pagination.total``.
+
+        Requests pages of ``limit`` rows (capped at the API max of 200),
+        advancing ``offset`` by the number of rows collected so far, until the
+        collected rows reach ``pagination.total`` or a page returns no rows.
+        The caller's ``params`` dict is never mutated.
+        """
+        page_limit = min(max(int(limit), 1), 200)
+        base_params = dict(params or {})
+        collected: list[dict] = []
+        offset = 0
+
+        while True:
+            page_params = dict(base_params)
+            page_params["limit"] = page_limit
+            page_params["offset"] = offset
+            payload = self.get(path, params=page_params)
+            rows = payload.get(data_key) or []
+            collected.extend(rows)
+
+            if not rows:
+                break
+            total = (payload.get("pagination") or {}).get("total")
+            if total is None or len(collected) >= int(total):
+                break
+            offset = len(collected)
+
+        return collected
+
     def close(self) -> None:
         self._client.close()
 

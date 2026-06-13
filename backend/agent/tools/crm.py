@@ -9,6 +9,7 @@ from services.api_client import get_client
 
 OPEN_STAGES = {"qualification", "negotiation"}
 SAMPLE_CAP = 100
+CHANNELS = ("GDO", "distributor", "horeca")
 
 TOOL_DEFINITIONS: list[dict[str, Any]] = [
     {
@@ -30,6 +31,14 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                         "type": "string",
                         "enum": ["qualification", "negotiation", "won", "lost"],
                         "description": "Filter by pipeline stage",
+                    },
+                    "group_by": {
+                        "type": "string",
+                        "enum": ["customer_channel", "stage"],
+                        "description": (
+                            "Group total value across ALL pages. Use customer_channel "
+                            "to break negotiation totals into GDO / distributor / horeca."
+                        ),
                     },
                 },
                 "additionalProperties": False,
@@ -156,7 +165,74 @@ def _row_amount(row: dict[str, Any], *keys: str) -> float:
     return 0.0
 
 
+def _extract_customer_channel(payload: dict[str, Any]) -> str | None:
+    record = payload.get("data") if isinstance(payload.get("data"), dict) else payload
+    if not isinstance(record, dict):
+        return None
+    return record.get("channel") or record.get("customer_channel")
+
+
+def _row_channel(
+    client: Any, row: dict[str, Any], cache: dict[str, str | None]
+) -> str | None:
+    channel = row.get("customer_channel") or row.get("channel")
+    if channel:
+        return channel
+    customer_id = row.get("customer_id")
+    if not customer_id:
+        return None
+    if customer_id not in cache:
+        payload = client.get(f"/crm/customers/{customer_id}")
+        cache[customer_id] = _extract_customer_channel(payload)
+    return cache[customer_id]
+
+
+def _run_opportunities_grouped(arguments: dict[str, Any], group_by: str) -> tuple[str, str]:
+    client = get_client()
+    params: dict[str, str] = {}
+    if stage := arguments.get("stage"):
+        params["stage"] = stage
+    if customer_id := arguments.get("customer_id"):
+        params["customer_id"] = customer_id
+
+    rows = client.get_all_pages("/crm/opportunities", params=params or None)
+
+    grouped_value: dict[str, float] = {}
+    grouped_count: dict[str, int] = {}
+    if group_by == "customer_channel":
+        grouped_value = {channel: 0.0 for channel in CHANNELS}
+        grouped_count = {channel: 0 for channel in CHANNELS}
+        cache: dict[str, str | None] = {}
+        for row in rows:
+            channel = _row_channel(client, row, cache)
+            if channel not in grouped_value:
+                continue
+            grouped_value[channel] += _row_amount(row, "value_eur", "value")
+            grouped_count[channel] += 1
+    else:  # group_by == "stage"
+        for row in rows:
+            stage_key = str(row.get("stage") or "unknown")
+            grouped_value[stage_key] = grouped_value.get(stage_key, 0.0) + _row_amount(
+                row, "value_eur", "value"
+            )
+            grouped_count[stage_key] = grouped_count.get(stage_key, 0) + 1
+
+    result = {
+        "group_by": group_by,
+        "stage": arguments.get("stage"),
+        "count": len(rows),
+        "grouped_total_value_eur": grouped_value,
+        "grouped_count": grouped_count,
+        "total_value_eur": sum(grouped_value.values()),
+        "note": "Totals summed in Python across all pages of /crm/opportunities.",
+    }
+    return json.dumps(result), "crm/opportunities"
+
+
 def _run_list_opportunities(arguments: dict[str, Any]) -> tuple[str, str]:
+    if group_by := arguments.get("group_by"):
+        return _run_opportunities_grouped(arguments, group_by)
+
     params: dict[str, str] = {}
     if customer_id := arguments.get("customer_id"):
         params["customer_id"] = customer_id

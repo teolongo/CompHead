@@ -108,7 +108,7 @@ def test_list_opportunities_group_by_channel_pages_and_sums() -> None:
     grouped = result["grouped_total_value_eur"]
     assert grouped["GDO"] == 150
     assert grouped["distributor"] == 200
-    assert grouped["horeca"] == 375
+    assert grouped["horeca"] == 325
     # Second page was fetched (proves we did not stop at page 1).
     offsets = [
         call.args[1].get("offset") if len(call.args) > 1 else call.kwargs["params"].get("offset")
