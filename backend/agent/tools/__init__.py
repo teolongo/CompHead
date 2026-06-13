@@ -4,14 +4,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from agent.tools import crm, erp
+from agent.tools import calls, crm, erp
 
 CRM_TOOLS = {definition["function"]["name"] for definition in crm.get_tool_definitions()}
 ERP_TOOLS = {definition["function"]["name"] for definition in erp.get_tool_definitions()}
+CALLS_TOOLS = {definition["function"]["name"] for definition in calls.get_tool_definitions()}
 
 
 def get_tool_definitions() -> list[dict[str, Any]]:
-    return crm.get_tool_definitions() + erp.get_tool_definitions()
+    return (
+        crm.get_tool_definitions()
+        + erp.get_tool_definitions()
+        + calls.get_tool_definitions()
+    )
 
 
 def run_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
@@ -19,4 +24,6 @@ def run_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
         return crm.run_crm_tool(name, arguments)
     if name in ERP_TOOLS:
         return erp.run_erp_tool(name, arguments)
+    if name in CALLS_TOOLS:
+        return calls.run_calls_tool(name, arguments)
     raise ValueError(f"Unknown tool: {name}")

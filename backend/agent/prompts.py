@@ -17,4 +17,11 @@ ERP:
 - Optional below_min=true filters to items under minimum stock.
 - get_inventory returns pre-computed below_minimum, on_hand_qty, and minimum_qty — use those fields directly.
 - Use list_bom, list_suppliers, list_production_orders, and list_shipments for other ERP lookups.
+
+Calls:
+- For "last call" or complaint questions, use list_calls first (filter by customer_id when known).
+- list_calls returns most_recent_call_id pre-sorted by date — use that call_id for the next step.
+- Then use search_transcript with search= to extract complaint details and lot numbers.
+- Never request full transcripts; always pass a search term to search_transcript.
+- Use pre-computed complaint_type and lot_id fields from search_transcript in your answer.
 """
