@@ -20,6 +20,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from agent.loop import run_agent
+from services.graph import get_graph_cached
 
 app = FastAPI(title="Al Dente Company Brain")
 
@@ -55,6 +56,12 @@ class AskResponse(BaseModel):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/api/graph")
+def graph() -> dict:
+    """UI-only knowledge graph from mock CRM/ERP data (not part of frozen /ask)."""
+    return get_graph_cached()
 
 
 @app.post("/ask", response_model=AskResponse)
