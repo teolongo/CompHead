@@ -57,7 +57,7 @@ Plans:
 
 **Goal:** Fix the failure modes that kill L1 scores — pagination, traps, multi-hop.
 **Mode:** mvp
-**Plans:** 2/4 plans executed
+**Plans:** 3/4 plans executed
 **Success Criteria:**
 
 1. Aggregation helper pages through all results using `pagination.total`
@@ -72,7 +72,7 @@ Plans:
 
 - [x] 03-01-PLAN.md — Pagination helper + CRM channel totals (Q6) + broken-pasta counter (Q11)
 - [x] 03-02-PLAN.md — Trap/premise correctness preflight: lot profit/cost (Q7) + missing customer (Q8)
-- [ ] 03-03-PLAN.md
+- [x] 03-03-PLAN.md — Multi-hop chains: ERP lot→SKU→BOM→supplier→stock (Q10), return-policy (Q5), price authority (Q12)
 - [ ] 03-04-PLAN.md
 
 ---

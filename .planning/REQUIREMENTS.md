@@ -22,9 +22,9 @@
 
 - [x] **DATA-01**: Pagination-aware aggregation — use `pagination.total`, page through
 - [x] **DATA-02**: Arithmetic (sums, counts, group-bys) computed in Python
-- [ ] **DATA-03**: Entity premise verification before answering (trap handling)
-- [ ] **DATA-04**: Honest "not available" when data doesn't exist in sources
-- [ ] **DATA-05**: Multi-hop chains (customer → order → lot → BOM → supplier)
+- [x] **DATA-03**: Entity premise verification before answering (trap handling)
+- [x] **DATA-04**: Honest "not available" when data doesn't exist in sources
+- [x] **DATA-05**: Multi-hop chains (customer → order → lot → BOM → supplier)
 
 ### Artifacts
 
