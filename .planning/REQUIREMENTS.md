@@ -14,7 +14,7 @@
 ### API Tools (4 verticali)
 
 - [ ] **CRM-01**: Search/list customers, opportunities, orders, invoices with filters
-- [ ] **ERP-01**: Query production, inventory, suppliers, BOM, shipments
+- [x] **ERP-01**: Query production, inventory, suppliers, BOM, shipments
 - [ ] **CALLS-01**: List calls; search transcripts surgically (not full download)
 - [ ] **KB-01**: Retrieve relevant KB documents by query
 

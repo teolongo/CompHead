@@ -23,7 +23,7 @@
 
 **Goal:** Agent handles crm, erp, calls, and kb questions with proper tools.
 **Mode:** mvp
-**Plans:** 4 plans
+**Plans:** 1/4 plans executed
 **Success Criteria:**
 
 1. CRM tools: customers, opportunities, orders, invoices
@@ -37,7 +37,7 @@
 Plans:
 **Wave 1**
 
-- [ ] 02-01-PLAN.md — ERP vertical slice: get_inventory + barrel foundation (Q2)
+- [x] 02-01-PLAN.md — ERP vertical slice: get_inventory + barrel foundation (Q2)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
