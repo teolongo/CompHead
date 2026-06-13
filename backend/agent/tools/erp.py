@@ -131,6 +131,44 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "resolve_bom_supplier_stock",
+            "description": (
+                "Resolve a full BOM/supplier/stock chain in one deterministic call. "
+                "Give EITHER a finished SKU (sku) OR a production lot id (lot_id); "
+                "when a question contains a LOT-... id, pass lot_id and the tool "
+                "resolves it to the finished SKU first. Optionally pass "
+                "material_category (e.g. semolina) to select the right BOM row. "
+                "Returns lot_id, finished_sku, raw_material_sku, raw_material_name, "
+                "supplier_id, supplier_name, and pre-computed below_minimum / "
+                "on_hand_qty / minimum_qty for the raw material. Use these exact "
+                "fields; do not infer the supplier or recompute the stock comparison."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "sku": {
+                        "type": "string",
+                        "description": "Finished product SKU, e.g. PAS-SPA-500",
+                    },
+                    "lot_id": {
+                        "type": "string",
+                        "description": "Production lot id, e.g. LOT-2026-0876",
+                    },
+                    "material_category": {
+                        "type": "string",
+                        "description": (
+                            "Raw-material category to select from the BOM, e.g. "
+                            "semolina, wheat, packaging, labels, ink"
+                        ),
+                    },
+                },
+                "additionalProperties": False,
+            },
+        },
+    },
 ]
 
 
@@ -255,6 +293,230 @@ def _run_list_shipments(arguments: dict[str, Any]) -> tuple[str, str]:
     return json.dumps(result), "erp/shipments"
 
 
+_LOT_FIELDS = ("lot_id", "production_lot", "lot", "lot_number", "lot_code")
+_SKU_FIELDS = ("finished_sku", "sku", "product_sku", "sku_code", "product")
+_COMPONENT_SKU_FIELDS = (
+    "component_sku",
+    "raw_material_sku",
+    "material_sku",
+    "component",
+    "sku",
+)
+_COMPONENT_NAME_FIELDS = (
+    "component_name",
+    "raw_material_name",
+    "material_name",
+    "name",
+    "description",
+)
+_SUPPLIER_ID_FIELDS = ("supplier_id", "supplier_code", "vendor_id")
+# Strict fields for rows that are NOT supplier records (BOM / inventory): a bare
+# "name" there is the material name, never the supplier.
+_SUPPLIER_NAME_FIELDS = ("supplier_name", "supplier", "vendor_name", "vendor")
+# Supplier-endpoint rows: a bare "name" is the supplier name.
+_SUPPLIER_ROW_NAME_FIELDS = ("supplier_name", "name", "vendor_name", "vendor")
+_VALID_CATEGORIES = ("semolina", "wheat", "packaging", "labels", "ink", "logistics")
+
+
+def _row_str(row: dict[str, Any], *keys: str) -> str | None:
+    for key in keys:
+        value = row.get(key)
+        if value:
+            return str(value)
+    return None
+
+
+def _resolve_lot_to_sku(lot_id: str) -> str | None:
+    """Resolve a production lot id to its finished SKU via production orders.
+
+    There is no server-side lot filter, so page the production-order log and
+    match the lot id against the common lot fields. Production orders are the
+    direct link between a lot and the finished SKU it produced.
+    """
+    lot_upper = lot_id.upper()
+    rows = get_client().get_all_pages("/erp/production-orders", params=None)
+    for row in rows:
+        row_lot = _row_str(row, *_LOT_FIELDS)
+        if row_lot and row_lot.upper() == lot_upper:
+            return _row_str(row, *_SKU_FIELDS)
+    return None
+
+
+def _bom_component_fields(row: dict[str, Any]) -> tuple[str | None, str | None]:
+    return _row_str(row, *_COMPONENT_SKU_FIELDS), _row_str(row, *_COMPONENT_NAME_FIELDS)
+
+
+def _select_bom_row(
+    rows: list[dict[str, Any]], material_category: str | None
+) -> dict[str, Any] | None:
+    if not rows:
+        return None
+    if material_category:
+        category = material_category.strip().lower()
+        code = category[:3].upper()
+        for row in rows:
+            sku, name = _bom_component_fields(row)
+            row_category = str(row.get("category") or "").lower()
+            if row_category == category:
+                return row
+            if sku and code and code in sku.upper():
+                return row
+            if name and category in name.lower():
+                return row
+    # Default: first row that looks like a raw material.
+    for row in rows:
+        sku, _ = _bom_component_fields(row)
+        if sku and sku.upper().startswith("RAW-"):
+            return row
+    return rows[0]
+
+
+def _category_for_material(raw_material_sku: str | None, material_category: str | None) -> str | None:
+    if material_category and material_category.strip().lower() in _VALID_CATEGORIES:
+        return material_category.strip().lower()
+    if not raw_material_sku:
+        return None
+    code = raw_material_sku.upper()
+    mapping = {
+        "RAW-SEM": "semolina",
+        "RAW-WHE": "wheat",
+        "RAW-PCK": "packaging",
+        "RAW-PAC": "packaging",
+        "RAW-BOX": "packaging",
+        "RAW-LAB": "labels",
+        "RAW-INK": "ink",
+    }
+    for prefix, category in mapping.items():
+        if code.startswith(prefix):
+            return category
+    return None
+
+
+def _resolve_supplier(
+    bom_row: dict[str, Any],
+    inventory_row: dict[str, Any] | None,
+    raw_material_sku: str | None,
+    material_category: str | None,
+) -> tuple[str | None, str | None]:
+    # 1. Supplier fields already present on the BOM row.
+    sid = _row_str(bom_row, *_SUPPLIER_ID_FIELDS)
+    sname = _row_str(bom_row, *_SUPPLIER_NAME_FIELDS)
+    if sname:
+        return sid, sname
+    # 2. Supplier fields on the matched raw-material inventory row.
+    if inventory_row:
+        sid = _row_str(inventory_row, *_SUPPLIER_ID_FIELDS)
+        sname = _row_str(inventory_row, *_SUPPLIER_NAME_FIELDS)
+        if sname:
+            return sid, sname
+    # 3. Targeted supplier lookup, filtered by category when known.
+    category = _category_for_material(raw_material_sku, material_category)
+    params: dict[str, str] = {}
+    if category and category in _VALID_CATEGORIES:
+        params["category"] = category
+    payload = get_client().get("/erp/suppliers", params=params or None)
+    rows = payload.get("data") or []
+    if not rows:
+        return None, None
+    # Prefer a supplier whose row references the raw material; else first match.
+    if raw_material_sku:
+        target = raw_material_sku.upper()
+        for row in rows:
+            if target in json.dumps(row).upper():
+                return (
+                    _row_str(row, *_SUPPLIER_ID_FIELDS),
+                    _row_str(row, *_SUPPLIER_ROW_NAME_FIELDS),
+                )
+    first = rows[0]
+    return _row_str(first, *_SUPPLIER_ID_FIELDS), _row_str(first, *_SUPPLIER_ROW_NAME_FIELDS)
+
+
+def _resolve_raw_material_inventory(raw_material_sku: str) -> dict[str, Any] | None:
+    payload = get_client().get(
+        "/erp/inventory",
+        params={"search": raw_material_sku, "type": "raw_material"},
+    )
+    rows = payload.get("data") or []
+    return _find_matching_row(rows, raw_material_sku)
+
+
+def _not_found_chain(lot_id: str | None, finished_sku: str | None, note: str) -> tuple[str, str]:
+    result = {
+        "lot_id": lot_id,
+        "finished_sku": finished_sku,
+        "raw_material_sku": None,
+        "raw_material_name": None,
+        "supplier_id": None,
+        "supplier_name": None,
+        "below_minimum": None,
+        "on_hand_qty": None,
+        "minimum_qty": None,
+        "note": note,
+    }
+    return json.dumps(result), "erp/bom"
+
+
+def _run_resolve_bom_supplier_stock(arguments: dict[str, Any]) -> tuple[str, str]:
+    sku = arguments.get("sku")
+    lot_id = arguments.get("lot_id")
+    material_category = arguments.get("material_category")
+
+    if not sku and not lot_id:
+        return _not_found_chain(
+            None, None, "Provide either a finished SKU or a production lot id."
+        )
+
+    finished_sku = sku
+    if not finished_sku and lot_id:
+        finished_sku = _resolve_lot_to_sku(lot_id)
+        if not finished_sku:
+            return _not_found_chain(
+                lot_id,
+                None,
+                f"Could not resolve lot {lot_id} to a finished SKU in production orders.",
+            )
+
+    bom_payload = get_client().get("/erp/bom", params={"sku": finished_sku})
+    bom_rows = bom_payload.get("data") or []
+    bom_row = _select_bom_row(bom_rows, material_category)
+    if not bom_row:
+        return _not_found_chain(
+            lot_id, finished_sku, f"No bill of materials rows found for {finished_sku}."
+        )
+
+    raw_material_sku, raw_material_name = _bom_component_fields(bom_row)
+    if not raw_material_sku:
+        return _not_found_chain(
+            lot_id, finished_sku, "BOM row did not expose a raw material SKU."
+        )
+
+    inventory_row = _resolve_raw_material_inventory(raw_material_sku)
+    supplier_id, supplier_name = _resolve_supplier(
+        bom_row, inventory_row, raw_material_sku, material_category
+    )
+
+    if inventory_row:
+        below_minimum, on_hand, minimum = _compute_inventory_status(inventory_row)
+        if not raw_material_name:
+            raw_material_name = inventory_row.get("name")
+    else:
+        below_minimum, on_hand, minimum = None, None, None
+
+    result = {
+        "lot_id": lot_id,
+        "finished_sku": finished_sku,
+        "raw_material_sku": raw_material_sku,
+        "raw_material_name": raw_material_name,
+        "supplier_id": supplier_id,
+        "supplier_name": supplier_name,
+        "below_minimum": below_minimum,
+        "on_hand_qty": on_hand,
+        "minimum_qty": minimum,
+        "note": "Chain resolved deterministically: lot/SKU -> BOM -> supplier -> raw-material stock.",
+    }
+    return json.dumps(result), "erp/bom"
+
+
 def run_erp_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
     dispatch = {
         "get_inventory": _run_get_inventory,
@@ -262,6 +524,7 @@ def run_erp_tool(name: str, arguments: dict[str, Any]) -> tuple[str, str]:
         "list_suppliers": _run_list_suppliers,
         "list_production_orders": _run_list_production_orders,
         "list_shipments": _run_list_shipments,
+        "resolve_bom_supplier_stock": _run_resolve_bom_supplier_stock,
     }
     handler = dispatch.get(name)
     if handler is None:
