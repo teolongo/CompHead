@@ -20,6 +20,7 @@
 ### Phase 2: All 4 Verticali + KB
 **Goal:** Agent handles crm, erp, calls, and kb questions with proper tools.
 **Mode:** mvp
+**Plans:** 4 plans
 **Success Criteria:**
 1. CRM tools: customers, opportunities, orders, invoices
 2. ERP tools: inventory, production, BOM, suppliers, shipments
@@ -28,6 +29,12 @@
 5. Sample questions 1-4 pass locally
 
 **Requirements:** CRM-01, ERP-01, CALLS-01, KB-01
+
+Plans:
+- [ ] 02-01-PLAN.md — ERP vertical slice: get_inventory + barrel foundation (Q2)
+- [ ] 02-02-PLAN.md — Calls vertical slice: list_calls + search_transcript (Q3)
+- [ ] 02-03-PLAN.md — KB vertical slice: SKU scan + BM25 retrieval (Q4)
+- [ ] 02-04-PLAN.md — CRM expansion + verticale extraction + Q1-Q4 battery
 
 ---
 
