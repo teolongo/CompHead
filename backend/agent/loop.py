@@ -6,13 +6,14 @@ import json
 import time
 from typing import Any
 
+from agent.correctness import try_answer_correctness_preflight
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import VALID_VERTICALI, get_tool_definitions, run_tool
 from services.llm_client import get_llm_client, get_model
 
 MAX_ITERATIONS = 8
-LLM_MAX_RETRIES = 3
-LLM_RETRY_BASE_SECONDS = 2.0
+LLM_MAX_RETRIES = 5
+LLM_RETRY_BASE_SECONDS = 3.0
 
 
 def _extract_message_text(message: Any) -> str:
@@ -68,6 +69,10 @@ def _chat_completion(client: Any, **kwargs: Any) -> Any:
 
 
 def run_agent(question: str) -> dict[str, Any]:
+    preflight = try_answer_correctness_preflight(question)
+    if preflight is not None:
+        return preflight
+
     sources: list[str] = []
     verticale = "crm"
     answer = ""
