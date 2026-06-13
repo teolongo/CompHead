@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import re
 import threading
 import time
-from typing import Any
+from pathlib import Path
+from typing import Any, Callable
 
 from services.api_client import get_client
 
@@ -17,6 +19,66 @@ MAX_CUSTOMERS = 40
 MAX_FINISHED_SKUS = 20
 MAX_BOM_SKUS = 12
 
+_KB_DIR = Path(__file__).resolve().parent.parent / "data" / "kb"
+
+# Category super-nodes and their document IDs (all 35 KB files).
+_KB_CATEGORIES: dict[str, dict[str, Any]] = {
+    "kb:product-specs": {
+        "label": "Product specifications",
+        "docs": [
+            f"DOC-{n:03d}"
+            for n in (
+                *range(1, 11),
+                *range(18, 26),
+                31,
+            )
+        ],
+    },
+    "kb:quality-compliance": {
+        "label": "Quality & compliance",
+        "docs": [
+            f"DOC-{n:03d}"
+            for n in (11, 12, 13, 16, 17, 26, 28, 29, 32, 33)
+        ],
+    },
+    "kb:price-policy": {
+        "label": "Pricing",
+        "docs": ["DOC-015"],
+    },
+    "kb:supplier-agreements": {
+        "label": "Supplier agreements",
+        "docs": ["DOC-027"],
+    },
+    "kb:logistics-trade": {
+        "label": "Logistics & trade",
+        "docs": ["DOC-014", "DOC-030", "DOC-034", "DOC-035"],
+    },
+}
+
+# Product spec doc -> SKU (from KB markdown tables).
+_DOC_PRODUCT_SKU: dict[str, str] = {
+    "DOC-001": "PAS-SPA-500",
+    "DOC-002": "PAS-PEN-500",
+    "DOC-003": "PAS-FUS-500",
+    "DOC-004": "PAS-RIG-500",
+    "DOC-005": "PAS-LIN-500",
+    "DOC-006": "PAS-FAR-500",
+    "DOC-007": "PAS-TAG-500",
+    "DOC-008": "PAS-CON-500",
+    "DOC-009": "PAS-ORE-500",
+    "DOC-010": "PAS-BUC-500",
+    "DOC-018": "PAS-SPA-BIO-500",
+    "DOC-019": "PAS-PEN-BIO-500",
+    "DOC-020": "PAS-FUS-BIO-500",
+    "DOC-021": "PAS-RIG-BIO-500",
+    "DOC-022": "PAS-LIN-BIO-500",
+    "DOC-023": "PAS-SPA-250",
+    "DOC-024": "PAS-PEN-250",
+    "DOC-025": "PAS-FUS-250",
+}
+
+_SKU_RE = re.compile(r"\bPAS-[A-Z0-9-]+\b")
+
 
 def _node(node_id: str, label: str, kind: str, **meta: Any) -> dict[str, Any]:
     return {"id": node_id, "label": label, "kind": kind, **meta}
@@ -24,6 +86,94 @@ def _node(node_id: str, label: str, kind: str, **meta: Any) -> dict[str, Any]:
 
 def _edge(source: str, target: str, relation: str) -> dict[str, Any]:
     return {"source": source, "target": target, "relation": relation}
+
+
+def _kb_doc_title(doc_id: str) -> str:
+    path = _KB_DIR / f"{doc_id}.md"
+    if not path.is_file():
+        return doc_id
+    first_line = path.read_text(encoding="utf-8").splitlines()[0].strip()
+    if first_line.startswith("# "):
+        return first_line[2:].strip()[:56]
+    return doc_id
+
+
+def _infer_doc_sku(doc_id: str) -> str | None:
+    if doc_id in _DOC_PRODUCT_SKU:
+        return _DOC_PRODUCT_SKU[doc_id]
+    path = _KB_DIR / f"{doc_id}.md"
+    if not path.is_file():
+        return None
+    match = _SKU_RE.search(path.read_text(encoding="utf-8"))
+    return match.group(0).upper() if match else None
+
+
+def _kb_nodes_and_edges(
+    nodes: dict[str, dict[str, Any]],
+    add_edge: Callable[[str, str, str], None],
+) -> int:
+    """Add KB category/doc nodes and semantic edges. Returns kb doc count."""
+    doc_to_category: dict[str, str] = {}
+    for cat_id, spec in _KB_CATEGORIES.items():
+        label = str(spec["label"])
+        nodes[cat_id] = _node(cat_id, label, "kb-category", category_key=cat_id.split(":")[-1])
+        for doc_id in spec["docs"]:
+            doc_to_category[doc_id] = cat_id
+
+    kb_doc_count = 0
+    for doc_id, cat_id in sorted(doc_to_category.items()):
+        doc_node_id = f"kb:{doc_id}"
+        nodes[doc_node_id] = _node(
+            doc_node_id,
+            _kb_doc_title(doc_id),
+            "kb-doc",
+            doc_id=doc_id,
+        )
+        add_edge(doc_node_id, cat_id, "in-category")
+        kb_doc_count += 1
+
+    product_ids = [nid for nid in nodes if nid.startswith("product:")]
+    supplier_ids = [
+        nid
+        for nid, n in nodes.items()
+        if n.get("kind") == "supplier" and str(n.get("category") or "").lower() == "semolina"
+    ]
+    gdo_customer_ids = [
+        nid
+        for nid, n in nodes.items()
+        if n.get("kind") == "customer" and str(n.get("channel") or "") == "GDO"
+    ]
+
+    for doc_id, cat_id in doc_to_category.items():
+        doc_node_id = f"kb:{doc_id}"
+        if cat_id == "kb:product-specs":
+            sku = _infer_doc_sku(doc_id)
+            if sku:
+                product_id = f"product:{sku}"
+                if product_id in nodes:
+                    add_edge(doc_node_id, product_id, "documented-by")
+
+    for doc_id in _KB_CATEGORIES["kb:quality-compliance"]["docs"]:
+        doc_node_id = f"kb:{doc_id}"
+        for product_id in product_ids:
+            add_edge(doc_node_id, product_id, "governed-by")
+
+    price_doc = f"kb:DOC-015"
+    if price_doc in nodes:
+        for product_id in product_ids:
+            add_edge(price_doc, product_id, "priced-by")
+
+    supplier_doc = f"kb:DOC-027"
+    if supplier_doc in nodes:
+        for supplier_id in supplier_ids:
+            add_edge(supplier_doc, supplier_id, "certified-by")
+
+    for doc_id in _KB_CATEGORIES["kb:logistics-trade"]["docs"]:
+        doc_node_id = f"kb:{doc_id}"
+        for customer_id in gdo_customer_ids:
+            add_edge(doc_node_id, customer_id, "applies-to")
+
+    return kb_doc_count
 
 
 def _infer_material_category(raw_sku: str | None) -> str | None:
@@ -167,6 +317,8 @@ def build_graph() -> dict[str, Any]:
         if sid and str(sid) in supplier_nodes:
             add_edge(supplier_nodes[str(sid)], raw_id, "supplies")
 
+    kb_docs = _kb_nodes_and_edges(nodes, add_edge)
+
     return {
         "nodes": list(nodes.values()),
         "edges": edges,
@@ -175,6 +327,8 @@ def build_graph() -> dict[str, Any]:
             "products": len(finished_skus),
             "suppliers": len(supplier_nodes),
             "materials": sum(1 for n in nodes.values() if n["kind"] == "material"),
+            "kb_docs": kb_docs,
+            "kb_categories": len(_KB_CATEGORIES),
         },
     }
 

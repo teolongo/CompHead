@@ -15,6 +15,8 @@ SAMPLE_GRAPH = {
         {"id": "product:PAS-SPA-500", "label": "Spaghetti 500g", "kind": "product"},
         {"id": "supplier:SUP-001", "label": "Molino", "kind": "supplier"},
         {"id": "material:RAW-SEM-003", "label": "Semolina", "kind": "material"},
+        {"id": "kb:DOC-001", "label": "Spaghetti spec", "kind": "kb-doc"},
+        {"id": "kb:product-specs", "label": "Product specifications", "kind": "kb-category"},
     ],
     "edges": [
         {
@@ -27,11 +29,28 @@ SAMPLE_GRAPH = {
             "target": "material:RAW-SEM-003",
             "relation": "supplies",
         },
+        {
+            "source": "kb:DOC-001",
+            "target": "product:PAS-SPA-500",
+            "relation": "documented-by",
+        },
+        {
+            "source": "kb:DOC-001",
+            "target": "kb:product-specs",
+            "relation": "in-category",
+        },
     ],
-    "meta": {"customers": 1, "products": 1, "suppliers": 1, "materials": 1},
+    "meta": {
+        "customers": 1,
+        "products": 1,
+        "suppliers": 1,
+        "materials": 1,
+        "kb_docs": 1,
+        "kb_categories": 1,
+    },
 }
 
-VALID_KINDS = {"customer", "product", "supplier", "material"}
+VALID_KINDS = {"customer", "product", "supplier", "material", "kb-doc", "kb-category"}
 
 
 def test_api_graph_returns_200_with_nodes_and_edges() -> None:
@@ -72,3 +91,28 @@ def test_flatten_bom_components_nested() -> None:
     assert len(flat) == 2
     assert flat[0]["component_sku"] == "RAW-SEM-003"
     assert flat[0]["finished_sku"] == "PAS-SPA-500"
+
+
+def test_kb_nodes_and_edges_offline() -> None:
+    from services.graph import _kb_nodes_and_edges
+
+    nodes = {
+        "product:PAS-SPA-500": {"id": "product:PAS-SPA-500", "kind": "product", "label": "Spaghetti"},
+        "customer:CUST-0132": {"id": "customer:CUST-0132", "kind": "customer", "label": "Primato", "channel": "GDO"},
+        "supplier:SUP-001": {"id": "supplier:SUP-001", "kind": "supplier", "label": "Molino", "category": "semolina"},
+    }
+    edges: list = []
+    seen: set = set()
+
+    def add_edge(source: str, target: str, relation: str) -> None:
+        key = (source, target, relation)
+        if key in seen:
+            return
+        seen.add(key)
+        edges.append({"source": source, "target": target, "relation": relation})
+
+    count = _kb_nodes_and_edges(nodes, add_edge)
+    assert count == 35
+    assert any(n["kind"] == "kb-doc" for n in nodes.values())
+    assert any(n["kind"] == "kb-category" for n in nodes.values())
+    assert any(e["relation"] == "documented-by" for e in edges)
