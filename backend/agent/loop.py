@@ -6,6 +6,7 @@ import json
 import time
 from typing import Any
 
+from agent.artifacts import try_answer_artifact_preflight
 from agent.correctness import try_answer_correctness_preflight
 from agent.prompts import SYSTEM_PROMPT
 from agent.tools import VALID_VERTICALI, get_tool_definitions, run_tool
@@ -72,6 +73,10 @@ def run_agent(question: str) -> dict[str, Any]:
     preflight = try_answer_correctness_preflight(question)
     if preflight is not None:
         return preflight
+
+    artifact = try_answer_artifact_preflight(question)
+    if artifact is not None:
+        return artifact
 
     sources: list[str] = []
     verticale = "crm"
