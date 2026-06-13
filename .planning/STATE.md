@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Completed 03-01-PLAN.md
-last_updated: "2026-06-13T12:25:25.182Z"
+stopped_at: Completed 03-02-PLAN.md
+last_updated: "2026-06-13T12:40:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 10
-  completed_plans: 7
-  percent: 70
+  completed_plans: 8
+  percent: 80
 ---
 
 # State — Al Dente Company Brain
@@ -25,8 +25,8 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 ## Session
 
 - **Started:** 2026-06-13
-- **Last session:** 2026-06-13T12:25:25.182Z
-- **Stopped at:** Completed 03-01-PLAN.md
+- **Last session:** 2026-06-13T12:40:00.000Z
+- **Stopped at:** Completed 03-02-PLAN.md
 - **Resume file:** None
 - **Deadline:** 17:00 (submission)
 - **Time budget:** ~5 hours
@@ -37,7 +37,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 |-------|--------|-------|
 | 1. Agent Skeleton | pending | |
 | 2. All Verticali + KB | in progress | 02-01 ERP, 02-02 Calls, 02-03 KB complete |
-| 3. Correctness Layer | in progress | 03-01 pagination helper + Q6 channel totals + Q11 defect counter complete |
+| 3. Correctness Layer | in progress | 03-01 pagination/aggregation; 03-02 trap preflight (Q7 lot profit/cost + Q8 missing customer) complete |
 | 4. Artifacts + UI | pending | |
 
 ## Blockers
@@ -53,7 +53,8 @@ None
 - get_all_pages follows pagination.total, caps limit at 200, no caller-param mutation (D-17)
 - Aggregates computed in Python: CRM channel totals (Q6) and broken-pasta call count (Q11) (D-18)
 - count_calls_by_defect pages all calls + targeted transcript search, no full downloads (D-19)
+- Deterministic trap preflight before the LLM loop: abstain on unsupported lot profit/cost metrics; verify missing-customer order premises via /crm/customers (D-20)
 
 ## Next Action
 
-Execute 03-02-PLAN.md — next correctness slice (traps / multi-hop)
+Execute 03-03-PLAN.md — next correctness slice (multi-hop chains)
