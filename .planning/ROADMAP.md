@@ -95,12 +95,12 @@ Plans:
 
 **Wave 1**
 
-- [ ] 04-01-PLAN.md — Graph API `/api/graph` from mock CRM/ERP data (UI-02, UI-03)
-- [ ] 04-02-PLAN.md — Artifact preflight: Q9 HTML deck + PDF + loop wiring (ART-01..03)
+- [x] 04-01-PLAN.md — Graph API `/api/graph` from mock CRM/ERP data (UI-02, UI-03)
+- [x] 04-02-PLAN.md — Artifact preflight: Q9 HTML deck + PDF + loop wiring (ART-01..03)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 04-03-PLAN.md — Company Brain UI: chat, graph highlight, Three.js hero (UI-01..03)
+- [x] 04-03-PLAN.md — Company Brain UI: chat, graph highlight, Three.js hero (UI-01..03)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

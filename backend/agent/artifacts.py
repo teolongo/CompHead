@@ -69,13 +69,24 @@ def _find_customer_id(question: str) -> str | None:
 
 
 def _customer_row(customer_id: str) -> dict[str, Any] | None:
-    payload = get_client().get("/crm/customers", params={"search": customer_id})
+    client = get_client()
+    try:
+        payload = client.get(f"/crm/customers/{customer_id}")
+        if isinstance(payload, dict) and payload.get("customer_id"):
+            return payload
+        if isinstance(payload, dict) and payload.get("id"):
+            return payload
+    except Exception:
+        pass
+    payload = client.get("/crm/customers", params={"search": customer_id})
     rows = payload.get("data") or []
     for row in rows:
         cid = row.get("customer_id") or row.get("id")
         if cid and str(cid).upper() == customer_id.upper():
             return row
-    return rows[0] if rows else None
+    if rows:
+        return rows[0]
+    return None
 
 
 def _open_opportunities(customer_id: str) -> tuple[list[dict[str, Any]], float]:

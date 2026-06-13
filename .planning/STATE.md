@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-06-13T13:36:47.163Z"
+stopped_at: Phase 4 Wave 3 checkpoint — human verify deploy/self-test
+last_updated: "2026-06-13T13:46:00.000Z"
 progress:
   total_phases: 4
   completed_phases: 2
   total_plans: 14
-  completed_plans: 9
-  percent: 50
+  completed_plans: 12
+  percent: 86
 ---
 
 # State — Al Dente Company Brain
@@ -20,7 +20,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-06-13)
 
 **Core value:** Agent fetches right facts from right sources, answers honestly within 30s
-**Current focus:** Phase 03 — correctness-layer
+**Current focus:** Phase 04 — artifacts-ui-polish
 
 ## Session
 
@@ -38,7 +38,7 @@ See: .planning/PROJECT.md (updated 2026-06-13)
 | 1. Agent Skeleton | pending | |
 | 2. All Verticali + KB | in progress | 02-01 ERP, 02-02 Calls, 02-03 KB complete |
 | 3. Correctness Layer | in progress | 03-01 pagination/aggregation; 03-02 trap preflight (Q7/Q8); 03-03 multi-hop chains (ERP lot→SKU→BOM→supplier→stock Q10, return-policy Q5, price authority Q12) complete |
-| 4. Artifacts + UI | pending | |
+| 4. Artifacts + UI | in progress | 04-01 graph API; 04-02 artifacts; 04-03 UI complete; 04-04 deploy checkpoint pending |
 
 ## Blockers
 
@@ -60,4 +60,4 @@ None
 
 ## Next Action
 
-Execute 03-04-PLAN.md — final correctness slice
+Complete 04-04 human checkpoint: deploy to Render, DevTools verify, platform self-test. Reply `self-test done` with results.
