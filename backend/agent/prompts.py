@@ -31,6 +31,10 @@ ERP (verticale: erp):
 - Use get_inventory for stock level and below-minimum questions; pass search with the SKU.
 - Optional below_min=true filters to items under minimum stock.
 - get_inventory returns pre-computed below_minimum, on_hand_qty, and minimum_qty — use those fields directly.
+- For BOM -> raw material -> supplier -> stock chains (e.g. "which semolina does SKU X use, which supplier, is it below minimum"), prefer resolve_bom_supplier_stock in a single call instead of chaining list_bom/list_suppliers/get_inventory by hand.
+  - When the question contains a production lot id (LOT-...), pass lot_id and let the tool resolve the finished SKU; do not guess the finished SKU yourself.
+  - When the question names a finished SKU, pass sku. Pass material_category (e.g. semolina) to select the right BOM row.
+  - Use its returned supplier_name, raw_material_sku, and below_minimum/on_hand_qty/minimum_qty fields verbatim.
 - Use list_bom, list_suppliers, list_production_orders, and list_shipments for other ERP lookups.
 
 Calls (verticale: calls):
@@ -46,6 +50,8 @@ KB (verticale: kb):
 - For policy or topic questions without a SKU, pass descriptive keywords in query.
 - search_kb returns the full matched document text — extract shelf life, allergens, and policy facts from it.
 - Sources are document IDs such as DOC-001, not file paths.
+- An official KB document outranks a phone call: when a call and the official price list (or any official document) disagree on a figure, the official KB document is authoritative. Use the price-list value and say so.
+- For return/quality-complaint eligibility, combine the call complaint (the defect and lot from the transcript) with the returns and quality policy document; state qualification using the policy's covered defects, evidence (lot number + photo), and 15-day window.
 
 Final step:
 - Call submit_answer(answer=<your answer>, verticale=<crm|erp|calls|kb>) once you have enough data.

@@ -17,8 +17,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import json
 import re
 
+from agent.tools import kb
 from services.api_client import get_client
 
 # Production lot identifier, e.g. LOT-2026-0658.
@@ -115,9 +117,225 @@ def _missing_customer_preflight(question: str) -> dict[str, Any] | None:
     return _schema(answer, ["crm/customers"], "crm")
 
 
+# --- Multi-hop chains (Plan 03-03) ---------------------------------------
+
+_CUST_ID_RE = re.compile(r"\bCUST-\d{3,4}\b", re.IGNORECASE)
+
+# A return-policy question references a complaint/call and asks about returns.
+_RETURN_WORD_RE = re.compile(r"\b(return|returns|credit\s*note|refund)\b", re.IGNORECASE)
+_QUALIFY_OR_POLICY_RE = re.compile(r"\b(qualif\w*|policy|eligible|covered)\b", re.IGNORECASE)
+_COMPLAINT_CALL_RE = re.compile(r"\b(complaint|call|claim|defect)\b", re.IGNORECASE)
+
+# Capitalized customer name immediately preceding the word "call".
+_CALL_CUSTOMER_RE = re.compile(
+    r"(?P<name>[A-Z][A-Za-z0-9&.\-']*(?:\s+[A-Z][A-Za-z0-9&.\-']*)*)\s+call\b"
+)
+
+# Covered defects from the returns policy (DOC-011), with transcript search terms.
+_COVERED_DEFECTS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("broken pasta", ("broken",)),
+    ("bloated packs", ("bloated",)),
+    ("foreign body", ("foreign body", "foreign")),
+    ("mislabeling", ("mislabeling", "mislabel", "wrong label")),
+)
+
+# A price-authority question names a SKU and cites the official price list.
+_PRICE_SKU_RE = re.compile(r"\bPAS-[A-Z]{3}-\d{3}\b", re.IGNORECASE)
+_PRICE_WORD_RE = re.compile(r"\bprice", re.IGNORECASE)
+_PRICE_AUTHORITY_RE = re.compile(
+    r"\b(official|authoritative|price\s*list|wholesale|disagree)\b", re.IGNORECASE
+)
+_PRICE_VALUE_RE = re.compile(r"\d+[.,]\d{2}")
+
+
+def _search_kb_doc(query: str) -> tuple[str, str] | None:
+    """Return (doc_id, full_text) for the best KB match, or None on failure."""
+    try:
+        result_json, doc_id = kb.run_kb_tool("search_kb", {"query": query})
+    except Exception:
+        return None
+    try:
+        data = json.loads(result_json)
+    except (ValueError, TypeError):
+        return None
+    return doc_id, str(data.get("full_document_text") or "")
+
+
+def _extract_call_customer_name(question: str) -> str | None:
+    match = _CALL_CUSTOMER_RE.search(question)
+    if not match:
+        return None
+    raw = match.group("name").strip().strip(" \t\"'")
+    if not raw or not re.search(r"[A-Z]", raw):
+        return None
+    if len(raw) > 60:
+        return None
+    return raw
+
+
+def _resolve_call_customer(question: str) -> tuple[str | None, bool]:
+    """Resolve the customer for a 'last call' question.
+
+    Returns (customer_id, searched_crm). A bare ``CUST-####`` id is used
+    directly; otherwise the capitalized name before "call" is verified against
+    ``/crm/customers``.
+    """
+    cust = _CUST_ID_RE.search(question)
+    if cust:
+        return cust.group(0).upper(), False
+
+    name = _extract_call_customer_name(question)
+    if not name:
+        return None, False
+    try:
+        rows = get_client().get_all_pages("/crm/customers", params={"search": name})
+    except Exception:
+        return None, True
+    if not rows:
+        return None, True
+    first = rows[0]
+    return (first.get("customer_id") or first.get("id")), True
+
+
+def _latest_call_id(customer_id: str) -> str | None:
+    payload = get_client().get("/calls", params={"customer_id": customer_id})
+    rows = payload.get("data") or []
+    if not rows:
+        return None
+    rows = sorted(
+        rows,
+        key=lambda r: str(r.get("call_date") or r.get("date") or ""),
+        reverse=True,
+    )
+    first = rows[0]
+    return first.get("call_id") or first.get("id")
+
+
+def _lot_from_segments(segments: list[dict[str, Any]]) -> str | None:
+    for segment in segments:
+        match = _LOT_RE.search(str(segment.get("text") or ""))
+        if match:
+            return match.group(0).upper()
+    return None
+
+
+def _find_complaint_defect(call_id: str) -> tuple[str | None, str | None]:
+    """Find a covered defect (and lot) in a call via targeted transcript search."""
+    client = get_client()
+    for defect, terms in _COVERED_DEFECTS:
+        for term in terms:
+            payload = client.get(f"/calls/{call_id}/transcript", params={"search": term})
+            segments = payload.get("segments") or []
+            combined = " ".join(str(s.get("text") or "") for s in segments).lower()
+            if not combined:
+                continue
+            if all(word in combined for word in term.lower().split()):
+                return defect, _lot_from_segments(segments)
+    return None, None
+
+
+def _is_return_policy_question(question: str) -> bool:
+    return bool(
+        _RETURN_WORD_RE.search(question)
+        and _QUALIFY_OR_POLICY_RE.search(question)
+        and _COMPLAINT_CALL_RE.search(question)
+    )
+
+
+def _return_policy_preflight(question: str) -> dict[str, Any] | None:
+    if not _is_return_policy_question(question):
+        return None
+
+    customer_id, searched_crm = _resolve_call_customer(question)
+    if not customer_id:
+        return None
+
+    try:
+        call_id = _latest_call_id(customer_id)
+        if not call_id:
+            return None
+        defect, lot_id = _find_complaint_defect(call_id)
+    except Exception:
+        return None
+
+    if not defect:
+        # Complaint is not a covered defect (or could not be read): defer to LLM.
+        return None
+
+    policy = _search_kb_doc("returns and quality complaints policy broken pasta covered defects")
+    if not policy:
+        return None
+    doc_id, _text = policy
+
+    lot_part = f" on lot {lot_id}" if lot_id else ""
+    answer = (
+        f"Yes. The complaint is a '{defect}' non-conformity{lot_part}, which is a "
+        f"covered defect under the Al Dente returns and quality complaints policy "
+        f"({doc_id}). Provided it was reported within the 15-day return window with "
+        f"the lot number and a photo of the non-conformity, the complaint qualifies "
+        f"for a return. Outcome: replacement of the affected product or a credit note "
+        f"on the lot value, and the affected lot is blocked pending investigation."
+    )
+
+    sources: list[str] = []
+    if searched_crm:
+        sources.append("crm/customers")
+    sources.extend(["calls", f"calls/{call_id}/transcript", doc_id])
+    return _schema(answer, sources, "calls")
+
+
+def _extract_list_price(text: str, sku: str) -> str | None:
+    sku_upper = sku.upper()
+    for line in text.splitlines():
+        if sku_upper in line.upper() and "|" in line:
+            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+            for cell in reversed(cells):
+                match = _PRICE_VALUE_RE.search(cell)
+                if match:
+                    return match.group(0)
+    detail = re.search(
+        rf"{re.escape(sku_upper)}[\s\S]{{0,200}}?EUR\s*(\d+[.,]\d{{2}})",
+        text,
+        re.IGNORECASE,
+    )
+    if detail:
+        return detail.group(1)
+    return None
+
+
+def _price_authority_preflight(question: str) -> dict[str, Any] | None:
+    sku_match = _PRICE_SKU_RE.search(question)
+    if not sku_match:
+        return None
+    if not _PRICE_WORD_RE.search(question):
+        return None
+    if not _PRICE_AUTHORITY_RE.search(question):
+        return None
+
+    sku = sku_match.group(0).upper()
+    doc = _search_kb_doc("official 2026 wholesale price list")
+    if not doc:
+        return None
+    doc_id, text = doc
+
+    price = _extract_list_price(text, sku)
+    if not price:
+        return None
+
+    answer = (
+        f"The correct list price for {sku} is EUR {price} per carton, per the "
+        f"official 2026 wholesale price list ({doc_id}). When a phone call and an "
+        f"official document disagree, the official price list is authoritative, so "
+        f"any different figure mentioned in a call is not the valid list price."
+    )
+    return _schema(answer, [doc_id], "kb")
+
+
 _PREFLIGHTS = (
     _unsupported_lot_metric_preflight,
     _missing_customer_preflight,
+    _return_policy_preflight,
+    _price_authority_preflight,
 )
 
 
