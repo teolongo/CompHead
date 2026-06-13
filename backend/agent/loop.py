@@ -6,7 +6,7 @@ import json
 from typing import Any
 
 from agent.prompts import SYSTEM_PROMPT
-from agent.tools.crm import get_tool_definitions, run_crm_tool
+from agent.tools import get_tool_definitions, run_tool
 from services.llm_client import get_llm_client, get_model
 
 MAX_ITERATIONS = 5
@@ -24,7 +24,7 @@ def _extract_message_text(message: Any) -> str:
 
 def _execute_tool(name: str, arguments: str) -> tuple[str, str]:
     args = json.loads(arguments) if arguments else {}
-    return run_crm_tool(name, args)
+    return run_tool(name, args)
 
 
 def run_agent(question: str) -> dict[str, Any]:
