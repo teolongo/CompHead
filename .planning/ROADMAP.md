@@ -23,7 +23,7 @@
 
 **Goal:** Agent handles crm, erp, calls, and kb questions with proper tools.
 **Mode:** mvp
-**Plans:** 3/4 plans executed
+**Plans:** 4/4 plans complete
 **Success Criteria:**
 
 1. CRM tools: customers, opportunities, orders, invoices
@@ -49,7 +49,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 02-04-PLAN.md — CRM expansion + verticale extraction + Q1-Q4 battery
+- [x] 02-04-PLAN.md — CRM expansion + verticale extraction + Q1-Q4 battery
 
 ---
 
